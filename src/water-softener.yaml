@@ -1,0 +1,237 @@
+esphome:
+  name: water-softener
+  friendly_name: "Water Softener Monitor"
+
+esp32:
+  board: m5stack-atoms3
+  variant: esp32s3
+  framework:
+    type: arduino
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  
+  # Fallback hotspot if WiFi fails
+  ap:
+    ssid: "Softener-Fallback"
+    password: "12345678"
+
+# Enable captive portal for WiFi setup
+captive_portal:
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+
+# Enable OTA updates
+ota:
+  - platform: esphome
+
+# Web server for direct browser access
+web_server:
+  port: 80
+
+# I2C for the ToF sensor (ATOM S3 Lite Grove port)
+i2c:
+  sda: GPIO2
+  scl: GPIO1
+  scan: true
+
+# Global variable for tracking last update time
+globals:
+  - id: last_update_time
+    type: unsigned long
+    restore_value: no
+    initial_value: '0'
+
+# Configurable settings
+number:
+  - platform: template
+    name: "Update Interval"
+    id: update_interval_seconds
+    optimistic: true
+    min_value: 1
+    max_value: 300
+    step: 1
+    initial_value: 30
+    unit_of_measurement: "seconds"
+    icon: "mdi:timer"
+    mode: box
+
+  - platform: template
+    name: "Tank Height"
+    id: tank_height_cm
+    optimistic: true
+    min_value: 30
+    max_value: 200
+    step: 1
+    initial_value: 84
+    unit_of_measurement: "cm"
+    icon: "mdi:arrow-expand-vertical"
+    mode: box
+    on_value:
+      then:
+        - component.update: salt_level_percent
+
+  - platform: template
+    name: "Full Level Distance"
+    id: full_level_cm
+    optimistic: true
+    min_value: 5
+    max_value: 50
+    step: 1
+    initial_value: 15
+    unit_of_measurement: "cm"
+    icon: "mdi:arrow-collapse-down"
+    mode: box
+    on_value:
+      then:
+        - component.update: salt_level_percent
+
+  - platform: template
+    name: "Low Alert Threshold"
+    id: low_threshold
+    optimistic: true
+    min_value: 10
+    max_value: 50
+    step: 5
+    initial_value: 25
+    unit_of_measurement: "%"
+    icon: "mdi:alert"
+    mode: slider
+    on_value:
+      then:
+        - component.update: salt_status_text
+
+  - platform: template
+    name: "Critical Alert Threshold"
+    id: critical_threshold
+    optimistic: true
+    min_value: 5
+    max_value: 25
+    step: 5
+    initial_value: 10
+    unit_of_measurement: "%"
+    icon: "mdi:alert-octagon"
+    mode: slider
+    on_value:
+      then:
+        - component.update: salt_status_text
+
+  - platform: template
+    name: "Good Threshold"
+    id: good_threshold
+    optimistic: true
+    min_value: 30
+    max_value: 90
+    step: 5
+    initial_value: 50
+    unit_of_measurement: "%"
+    icon: "mdi:check"
+    mode: slider
+    on_value:
+      then:
+        - component.update: salt_status_text
+
+  - platform: template
+    name: "Full Threshold"
+    id: full_threshold
+    optimistic: true
+    min_value: 50
+    max_value: 95
+    step: 5
+    initial_value: 75
+    unit_of_measurement: "%"
+    icon: "mdi:check-circle"
+    mode: slider
+    on_value:
+      then:
+        - component.update: salt_status_text
+
+# VL53L0X Distance Sensor
+sensor:
+  - platform: vl53l0x
+    name: "Distance to Salt"
+    id: salt_distance_raw
+    address: 0x29
+    update_interval: never  # Controlled by interval component below
+    long_range: true
+    unit_of_measurement: "cm"
+    accuracy_decimals: 1
+    filters:
+      - multiply: 100  # Convert meters to cm
+      - filter_out: nan
+    on_value:
+      then:
+        - component.update: salt_level_percent
+        - component.update: salt_status_text
+
+  # Calculate salt level percentage
+  - platform: template
+    name: "Salt Level"
+    id: salt_level_percent
+    unit_of_measurement: "%"
+    icon: "mdi:water-percent"
+    accuracy_decimals: 0
+    update_interval: never  # Only updates when triggered
+    lambda: |-
+      float tank_height = id(tank_height_cm).state;
+      float full_level = id(full_level_cm).state;
+      float current_distance = id(salt_distance_raw).state;
+      
+      if (isnan(current_distance) || isnan(tank_height) || isnan(full_level)) {
+        return {};
+      }
+      
+      float salt_height = tank_height - current_distance;
+      float max_salt_height = tank_height - full_level;
+      float percentage = (salt_height / max_salt_height) * 100.0;
+      
+      // Clamp to 0-100%
+      if (percentage > 100.0) percentage = 100.0;
+      if (percentage < 0.0) percentage = 0.0;
+      
+      return percentage;
+
+# Status text
+text_sensor:
+  - platform: template
+    name: "Salt Status"
+    id: salt_status_text
+    update_interval: never  # Only updates when triggered
+    lambda: |-
+      float level = id(salt_level_percent).state;
+      float full_threshold_val = id(full_threshold)->state;
+      float good_threshold_val = id(good_threshold)->state;
+      float low_threshold_val = id(low_threshold)->state;
+      float critical_threshold_val = id(critical_threshold)->state;
+
+      if (isnan(level)) {
+        return {"Checking..."};
+      } else if (level >= full_threshold_val) {
+        return {"Full"};
+      } else if (level >= good_threshold_val) {
+        return {"Good"};
+      } else if (level >= low_threshold_val) {
+        return {"Low - Add Salt Soon"};
+      } else if (level >= critical_threshold_val) {
+        return {"Critical - Add Salt NOW!"};
+      } else {
+        return {"Critical - Add Salt NOW!"};
+      }
+
+# Check every second if it's time to update based on configured interval
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          unsigned long current_time = millis() / 1000;
+          unsigned long interval_sec = (unsigned long)id(update_interval_seconds).state;
+          
+          if (current_time - id(last_update_time) >= interval_sec) {
+            id(last_update_time) = current_time;
+            id(salt_distance_raw).update();
+          }
