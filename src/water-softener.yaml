@@ -110,7 +110,7 @@ number:
     max_value: 86400
     step: 1
     initial_value: 30
-    unit_of_measurement: "seconds"
+    unit_of_measurement: "s"
     icon: "mdi:timer"
     mode: box
     web_server:
