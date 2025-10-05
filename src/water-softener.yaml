@@ -92,7 +92,7 @@ number:
     min_value: 5
     max_value: 50
     step: 1
-    initial_value: 15
+    initial_value: 20
     unit_of_measurement: "cm"
     icon: "mdi:arrow-collapse-down"
     mode: box
@@ -109,7 +109,7 @@ number:
     min_value: 1
     max_value: 86400
     step: 1
-    initial_value: 30
+    initial_value: 20
     unit_of_measurement: "s"
     icon: "mdi:timer"
     mode: box
@@ -124,7 +124,7 @@ number:
     min_value: 0
     max_value: 100
     step: 5
-    initial_value: 10
+    initial_value: 20
     unit_of_measurement: "%"
     icon: "mdi:alert-octagon"
     mode: slider
@@ -141,7 +141,7 @@ number:
     min_value: 0
     max_value: 100
     step: 5
-    initial_value: 75
+    initial_value: 80
     unit_of_measurement: "%"
     icon: "mdi:check-circle"
     mode: slider
@@ -158,7 +158,7 @@ number:
     min_value: 0
     max_value: 100
     step: 5
-    initial_value: 50
+    initial_value: 60
     unit_of_measurement: "%"
     icon: "mdi:check"
     mode: slider
@@ -175,7 +175,7 @@ number:
     min_value: 0
     max_value: 100
     step: 5
-    initial_value: 25
+    initial_value: 40
     unit_of_measurement: "%"
     icon: "mdi:alert"
     mode: slider
@@ -209,24 +209,30 @@ button:
       - number.set:
           id: tank_height_cm
           value: 100
+      - delay: 100ms
       - number.set:
           id: full_level_cm
-          value: 15
+          value: 20
+      - delay: 100ms
       - number.set:
           id: update_interval_seconds
-          value: 30
+          value: 20
+      - delay: 100ms
       - number.set:
           id: full_threshold
-          value: 75
+          value: 80
+      - delay: 100ms
       - number.set:
           id: good_threshold
-          value: 50
+          value: 60
+      - delay: 100ms
       - number.set:
           id: low_threshold
-          value: 25
+          value: 40
+      - delay: 100ms
       - number.set:
           id: critical_threshold
-          value: 10
+          value: 20
 
 # VL53L0X Distance Sensor
 sensor:
