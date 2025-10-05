@@ -296,6 +296,7 @@ binary_sensor:
   - platform: template
     name: "Sensor Out of Range"
     id: sensor_out_of_range
+    icon: "mdi:alert-circle"
     lambda: |-
       // VL53L0X sensor hardware limits
       const float SENSOR_MIN_RANGE = 3.0;   // cm
@@ -318,6 +319,7 @@ binary_sensor:
   - platform: template
     name: "Calibration Active"
     id: calibration_active
+    icon: "mdi:speedometer"
     lambda: |-
       return id(calibration_mode).state;
 
@@ -326,6 +328,7 @@ text_sensor:
   - platform: template
     name: "Salt Status"
     id: salt_status_text
+    icon: "mdi:information-variant"
     update_interval: never  # Only updates when triggered
     lambda: |-
       float level = id(salt_level_percent).state;
