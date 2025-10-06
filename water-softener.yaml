@@ -10,7 +10,7 @@ substitutions:
   wifi_password: !secret wifi_password
 
 packages:
-  water_softener: github://rmaher001/water-softener-monitor/water-softener-package.yaml@master
+  water_softener: github://rmaher001/water-softener-monitor/src/water-softener-package.yaml@master
 
 # Optional: Override any settings from the package here
 # For example, to change default thresholds, add:

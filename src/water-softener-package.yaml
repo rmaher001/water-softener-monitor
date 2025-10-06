@@ -1,7 +1,11 @@
 # ESPHome Water Softener Salt Monitor Package
 # GitHub: https://github.com/rmaher001/water-softener-monitor
-
-# This file is the main package that users reference in their config
+#
+# Users reference this file via:
+# packages:
+#   water_softener: github://rmaher001/water-softener-monitor/src/water-softener-package.yaml@master
+#
+# Development: Create feature/fix branches and reference them with @branch-name
 
 esphome:
   name: ${device_name}
