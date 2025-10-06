@@ -36,7 +36,7 @@ ESPHome-based salt level monitor for water softener brine tanks using a VL53L0X 
      wifi_password: !secret wifi_password
 
    packages:
-     water_softener: github://rmaher001/water-softener-monitor/water-softener-package.yaml@main
+     water_softener: github://rmaher001/water-softener-monitor/water-softener-package.yaml@master
    ```
 
 3. **Flash via USB first time**:
