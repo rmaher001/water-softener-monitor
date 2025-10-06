@@ -4,17 +4,23 @@ ESPHome-based salt level monitor for water softener brine tanks using a VL53L0X 
 
 ## Hardware
 
-- M5Stack ATOM S3 Lite (ESP32-S3)
-- VL53L0X ToF sensor (0-200cm range)
-- 10cm Grove cable (sensor to ATOM)
-- Long USB-C cable for power
+- **M5Stack ATOM S3 Lite** (ESP32-S3)
+  - [Official M5Stack Store](https://shop.m5stack.com/products/atoms3-lite-esp32s3-dev-kit)
+  - Also available at Mouser, DigiKey, Adafruit
+- **M5Stack ToF Sensor Unit** (VL53L0X, 0-200cm range)
+  - [Official M5Stack Store](https://shop.m5stack.com/products/tof-sensor-unit)
+  - Also available at Mouser, DigiKey, Adafruit
+- **10cm Grove cable** (sensor to ATOM, included with sensor unit)
+- **Long USB-C cable** for power
 
 ## Physical Installation
 
-1. **Sensor mounting**: Attach VL53L0X to tank lid using M2.5 nylon screws and nuts through sensor mounting holes
+1. **Sensor mounting**: Attach M5Stack ToF sensor unit to underside of tank lid using 3M Velcro or double-sided foam tape
 2. **Cable routing**: Drill 8-10mm hole in lid, install rubber grommet, route Grove cable through
-3. **ATOM mounting**: Attach ATOM S3 to top of lid using 3M Velcro strips
+3. **ATOM mounting**: Attach ATOM S3 to top of tank lid using 3M Velcro strips
 4. **Power**: Connect long USB-C cable to ATOM (disconnect when refilling tank)
+
+**Note**: The M5Stack ToF sensor comes in a plastic case - Velcro/foam tape mounting works best and avoids drilling into the unit.
 
 ## Installation
 
