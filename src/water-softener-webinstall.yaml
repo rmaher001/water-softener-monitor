@@ -5,8 +5,6 @@
 substitutions:
   device_name: "water-softener"
   friendly_name: "Water Softener"
-  wifi_ssid: "placeholder_will_use_improv"
-  wifi_password: "placeholder_password_for_improv"
 
 # Override esphome section to add MAC suffix before package
 esphome:
@@ -17,3 +15,8 @@ esphome:
 # Include the main package for all sensor/config logic
 packages:
   water_softener: !include water-softener-package.yaml
+
+# WiFi configured via Improv Serial - no hard-coded credentials
+wifi:
+  ap:
+    ssid: "Water Softener"

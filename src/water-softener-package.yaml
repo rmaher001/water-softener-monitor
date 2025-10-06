@@ -17,14 +17,8 @@ esp32:
   framework:
     type: arduino
 
-wifi:
-  ssid: ${wifi_ssid}
-  password: ${wifi_password}
-
-  # Fallback hotspot if WiFi fails
-  ap:
-    ssid: "${device_name}-Fallback"
-    password: "configme123"
+# WiFi configuration moved to individual config files
+# (water-softener-dev.yaml, water-softener-webinstall.yaml, water-softener.yaml)
 
 # Enable captive portal for WiFi setup
 captive_portal:

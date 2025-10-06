@@ -11,6 +11,16 @@ substitutions:
 packages:
   water_softener: !include water-softener-package.yaml
 
+# WiFi configuration for development
+wifi:
+  ssid: ${wifi_ssid}
+  password: ${wifi_password}
+
+  # Fallback hotspot if WiFi fails
+  ap:
+    ssid: "${device_name}-Fallback"
+    password: "configme123"
+
 # For testing branches: Switch to this format
 # packages:
 #   water_softener: github://rmaher001/water-softener-monitor/src/water-softener-package.yaml@feature/branch-name
