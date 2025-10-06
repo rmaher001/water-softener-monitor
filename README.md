@@ -27,7 +27,7 @@ ESPHome-based salt level monitor for water softener brine tanks using a VL53L0X 
    wifi_password: "YourWiFiPassword"
    ```
 
-2. **Create device config** (e.g., `water-softener.yaml`):
+2. **Copy `water-softener.yaml` to your ESPHome directory** and customize if needed:
    ```yaml
    substitutions:
      device_name: "water-softener"
