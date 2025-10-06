@@ -1,0 +1,19 @@
+# Water Softener Monitor - Web Installer Config
+# This config is used to build firmware for the web installer
+# Uses generic name with MAC suffix for unique device names
+
+substitutions:
+  device_name: "water-softener"
+  friendly_name: "Water Softener"
+  wifi_ssid: "placeholder_will_use_improv"
+  wifi_password: "placeholder_password_for_improv"
+
+# Override esphome section to add MAC suffix before package
+esphome:
+  name: ${device_name}
+  friendly_name: "${friendly_name}"
+  name_add_mac_suffix: true
+
+# Include the main package for all sensor/config logic
+packages:
+  water_softener: !include water-softener-package.yaml
