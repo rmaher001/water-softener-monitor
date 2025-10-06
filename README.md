@@ -10,7 +10,7 @@ ESPHome-based salt level monitor for water softener brine tanks using a VL53L0X 
 - **M5Stack ToF Sensor Unit** (VL53L0X, 0-200cm range)
   - [Official M5Stack Store](https://shop.m5stack.com/products/tof-sensor-unit)
   - Also available at Mouser, DigiKey, Adafruit
-- **10cm Grove cable** (sensor to ATOM, included with sensor unit)
+  - Includes 20cm Grove cable
 - **Long USB-C cable** for power
 
 ## Physical Installation
