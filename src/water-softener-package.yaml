@@ -24,7 +24,7 @@ wifi:
   # Fallback hotspot if WiFi fails
   ap:
     ssid: "${device_name}-Fallback"
-    password: "configme123"
+    password: "testworkflow"  # TESTING FEATURE BRANCH WORKFLOW
 
 # Enable captive portal for WiFi setup
 captive_portal:
