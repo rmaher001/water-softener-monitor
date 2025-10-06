@@ -29,6 +29,9 @@ wifi:
 # Enable captive portal for WiFi setup
 captive_portal:
 
+# Enable Improv via Serial for web installer WiFi configuration
+improv_serial:
+
 # Enable logging
 logger:
   baud_rate: 115200
