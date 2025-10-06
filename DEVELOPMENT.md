@@ -199,11 +199,11 @@ The web installer at https://rmaher001.github.io/water-softener-monitor/ uses ES
 **IMPORTANT**: Use ESPHome's pre-built `firmware.factory.bin` instead of manually merging binaries.
 
 ```bash
-# Compile the firmware
-~/esphome/venv/bin/esphome compile src/water-softener-dev.yaml
+# Compile the webinstall firmware (not dev firmware)
+~/esphome/venv/bin/esphome compile src/water-softener-webinstall.yaml
 
 # Copy the factory binary to docs directory
-cp src/.esphome/build/water-softener-dev/.pioenvs/water-softener-dev/firmware.factory.bin docs/
+cp src/.esphome/build/water-softener/.pioenvs/water-softener/firmware.factory.bin docs/
 
 # Update manifest.json version number
 # Edit docs/manifest.json and increment version
@@ -213,6 +213,40 @@ git add docs/firmware.factory.bin docs/manifest.json
 git commit -m "Update web installer firmware to vX.X.X"
 git push
 ```
+
+### User Workflow for Clean Entity IDs
+
+The web installer firmware includes `dashboard_import` which enables the official ESPHome adoption workflow for clean entity IDs:
+
+**Step 1: Flash Firmware**
+- User visits web installer and flashes firmware
+- Configures WiFi via Improv Serial prompt
+- Device boots with generic name (e.g., "water-softener-952d58")
+
+**Step 2: Adopt in ESPHome Dashboard (Required for Clean Entity IDs)**
+- Device appears in ESPHome Dashboard as "Discovered" device
+- User clicks "ADOPT" button
+- User enters custom friendly name (e.g., "Garage Water Softener")
+- ESPHome creates custom YAML with:
+  - Device name with MAC suffix for unique hostname
+  - User's chosen friendly name
+  - `name_add_mac_suffix: false` (MAC already in name)
+
+**Step 3: Add to Home Assistant**
+- After adoption, device auto-discovers in Home Assistant
+- Entity IDs use the friendly name → `sensor.garage_water_softener_salt_level` ✓
+- Clean, user-customized entity IDs without MAC suffix!
+
+**Important**: Users must adopt via ESPHome Dashboard BEFORE adding to Home Assistant. If they skip this step and add directly to HA, entity IDs will include the MAC suffix from the factory firmware.
+
+### Why This Workflow?
+
+This is the official ESPHome pattern used by:
+- ESPHome Bluetooth Proxies
+- Apollo Automation devices
+- All officially-supported web-installed ESPHome devices
+
+The `dashboard_import` configuration enables this workflow automatically.
 
 ### Why firmware.factory.bin?
 
