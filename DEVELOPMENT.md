@@ -190,6 +190,75 @@ If you need to delete the device from Home Assistant for a clean start:
 - If using GitHub reference: Changes only appear after pushing to that branch
 - Clear `.esphome` cache if needed: `rm -rf src/.esphome`
 
+## Web Installer: Building Firmware for ESP Web Tools
+
+The web installer at https://rmaher001.github.io/water-softener-monitor/ uses ESP Web Tools to flash firmware directly from the browser.
+
+### Building the Firmware
+
+**IMPORTANT**: Use ESPHome's pre-built `firmware.factory.bin` instead of manually merging binaries.
+
+```bash
+# Compile the firmware
+~/esphome/venv/bin/esphome compile src/water-softener-dev.yaml
+
+# Copy the factory binary to docs directory
+cp src/.esphome/build/water-softener-dev/.pioenvs/water-softener-dev/firmware.factory.bin docs/
+
+# Update manifest.json version number
+# Edit docs/manifest.json and increment version
+
+# Commit and push to GitHub
+git add docs/firmware.factory.bin docs/manifest.json
+git commit -m "Update web installer firmware to vX.X.X"
+git push
+```
+
+### Why firmware.factory.bin?
+
+ESPHome generates a `firmware.factory.bin` that includes:
+- Bootloader (with correct flash mode for ESP32-S3)
+- Partition table
+- boot_app0
+- Application firmware
+
+This is the "modern format" binary specifically built for web flashing. Do NOT use:
+- ❌ Manual `esptool merge-bin` commands
+- ❌ Individual bootloader.bin + partitions.bin + firmware.bin parts
+- ❌ The regular firmware.bin alone
+
+The factory binary has the correct flash parameters pre-configured by ESPHome's build system.
+
+### manifest.json Format
+
+```json
+{
+  "name": "Water Softener Salt Monitor",
+  "version": "1.5.0",
+  "home_assistant_domain": "esphome",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32-S3",
+      "parts": [
+        {
+          "path": "firmware.factory.bin",
+          "offset": 0
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Troubleshooting Web Installer
+
+If the web installer crashes Chrome during flashing:
+1. Verify you're using `firmware.factory.bin` (not merged or individual parts)
+2. Check that `logger` has `deassert_rts_dtr: true` for ESP32-S3 USB CDC compatibility
+3. Increment version number in manifest.json to avoid cached firmware
+4. Wait for GitHub Pages to rebuild (2-3 minutes after push)
+
 ## Recovery: Unbricking M5Stack ATOM S3
 
 If the ATOM S3 gets bricked (USB connect/disconnect bootloop, won't flash), follow this recovery procedure:
