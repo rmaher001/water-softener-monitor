@@ -5,6 +5,7 @@ src/secrets.yaml
 # Build artifacts
 .esphome/
 *.bin
+!docs/*.bin
 *.elf
 
 # Python

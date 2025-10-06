@@ -1,15 +1,14 @@
 {
   "name": "Water Softener Salt Monitor",
-  "version": "1.0.3",
+  "version": "1.2.0",
   "home_assistant_domain": "esphome",
   "new_install_prompt_erase": true,
   "builds": [
     {
       "chipFamily": "ESP32-S3",
-      "baud": 115200,
       "parts": [
         {
-          "path": "firmware.factory.bin",
+          "path": "merged-firmware.bin",
           "offset": 0
         }
       ]
