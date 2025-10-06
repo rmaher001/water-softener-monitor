@@ -1,0 +1,16 @@
+# Water Softener Monitor - Development Config
+# This config is used for testing changes before merging to master
+
+substitutions:
+  device_name: "water-softener-dev"
+  friendly_name: "Water Softener Dev"
+  wifi_ssid: !secret wifi_ssid
+  wifi_password: !secret wifi_password
+
+# For local development: Include package directly
+packages:
+  water_softener: !include water-softener-package.yaml
+
+# For testing branches: Switch to this format
+# packages:
+#   water_softener: github://rmaher001/water-softener-monitor/src/water-softener-package.yaml@feature/branch-name

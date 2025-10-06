@@ -1,9 +1,9 @@
 # Water Softener Monitor - Production Config
-# This is the production configuration that uses the package from GitHub
+# Used for the production unit - gets updates from GitHub master branch like all users
 
 substitutions:
-  device_name: "water-softener"
-  friendly_name: "Water Softener Monitor"
+  device_name: "water-softener-prod"
+  friendly_name: "Water Softener Prod"
   wifi_ssid: !secret wifi_ssid
   wifi_password: !secret wifi_password
 
