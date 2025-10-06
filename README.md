@@ -20,14 +20,18 @@ ESPHome-based salt level monitor for water softener brine tanks using a VL53L0X 
 
 ### For End Users (Recommended - Auto-updates from GitHub)
 
-1. **Create secrets file** in your ESPHome config directory:
+**Your ESPHome config directory is:**
+- Home Assistant add-on: `/config/esphome/`
+- Standalone ESPHome: Your working directory where you run `esphome` commands
+
+1. **Create or update `secrets.yaml`** in your ESPHome config directory (skip if you already have WiFi credentials):
    ```yaml
    # secrets.yaml
    wifi_ssid: "YourWiFiSSID"
    wifi_password: "YourWiFiPassword"
    ```
 
-2. **Copy `water-softener.yaml` to your ESPHome directory** and customize if needed:
+2. **Copy `water-softener.yaml`** from this repo to your ESPHome config directory and customize if needed:
    ```yaml
    substitutions:
      device_name: "water-softener"
