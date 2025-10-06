@@ -189,3 +189,70 @@ If you need to delete the device from Home Assistant for a clean start:
 - If using `!include`: Changes are instant (just recompile)
 - If using GitHub reference: Changes only appear after pushing to that branch
 - Clear `.esphome` cache if needed: `rm -rf src/.esphome`
+
+## Recovery: Unbricking M5Stack ATOM S3
+
+If the ATOM S3 gets bricked (USB connect/disconnect bootloop, won't flash), follow this recovery procedure:
+
+### Symptoms of Bricked Device
+- USB connects and disconnects repeatedly (~1 second cycle)
+- Cannot flash new firmware
+- No LED activity
+- Device not recognized by computer
+
+### Recovery Procedure
+
+**Step 1: Enter Download Mode**
+
+The key is holding the RST button long enough:
+
+1. **Unplug** the USB cable from ATOM S3
+2. **Press and hold the RST button** (side button)
+3. **While holding RST**, plug in the USB cable
+4. **Keep holding RST for 5-8 seconds** after plugging in (not just 2 seconds as labeled)
+5. **Release** the RST button
+6. The device should now stay connected without cycling
+
+**Note:** The label says "Hold 2s → G0=0" but in practice you need to hold it longer (5-8 seconds) for reliable entry into download mode.
+
+**Step 2: Erase Corrupted Firmware**
+
+With the device in download mode and connected:
+
+```bash
+# Check device is connected
+ls /dev/tty.* | grep usb
+
+# Erase the corrupted flash
+~/esphome/venv/bin/python -m esptool --chip esp32s3 --port /dev/tty.usbmodem* erase_flash
+```
+
+You should see:
+```
+Flash memory erased successfully in 2.1 seconds.
+```
+
+**Step 3: Flash Good Firmware**
+
+```bash
+# Flash the working dev firmware
+~/esphome/venv/bin/esphome run src/water-softener-dev.yaml --device /dev/tty.usbmodem*
+```
+
+The device should flash successfully and boot normally. I2C errors about the VL53L0X sensor are normal if the sensor isn't connected.
+
+### Prevention
+
+- **Do NOT use web-based ESP flashers** - they can cause hard bricks on ATOM S3
+- **Always use ESPHome CLI** or Home Assistant ESPHome dashboard for flashing
+- **Test on dev hardware first** before flashing production units
+- **Keep USB cable connected** throughout the entire flash process
+
+### If Recovery Fails
+
+If the RST button hold method doesn't work:
+
+1. Try different USB cables (must be data-capable, not charge-only)
+2. Try different USB ports or a powered USB hub
+3. Try holding **both buttons** (RST + top button) while plugging in
+4. As a last resort, physical GPIO0 to GND shorting may be required (advanced)
