@@ -24,6 +24,21 @@ ESPHome-based salt level monitor for water softener brine tanks using a VL53L0X 
 
 ## Installation
 
+### Quick Start - Web Installer (Easiest!)
+
+Flash firmware directly from your browser - no software installation required:
+
+**👉 [Open Web Installer](https://rmaher001.github.io/water-softener-monitor/)**
+
+Requirements:
+- Chrome or Edge browser
+- USB-C cable
+- Takes 5 minutes!
+
+After flashing, the device creates a WiFi hotspot for configuration, then auto-discovers in Home Assistant.
+
+---
+
 ### For End Users (Recommended - Auto-updates from GitHub)
 
 **Your ESPHome config directory is:**
