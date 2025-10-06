@@ -1,0 +1,20 @@
+# ESPHome Water Softener Salt Monitor - User Configuration
+#
+# This is the file users create in their ESPHome config directory.
+# It references the main package from GitHub and automatically pulls updates.
+
+substitutions:
+  device_name: "water-softener"
+  friendly_name: "Water Softener Monitor"
+  wifi_ssid: !secret wifi_ssid
+  wifi_password: !secret wifi_password
+
+packages:
+  water_softener: github://rmaher001/water-softener-monitor/water-softener-package.yaml@main
+
+# Optional: Override any settings from the package here
+# For example, to change default thresholds, add:
+# number:
+#   - platform: template
+#     id: full_threshold
+#     initial_value: 85
