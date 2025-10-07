@@ -10,7 +10,7 @@
       "improv": true,
       "parts": [
         {
-          "path": "firmware.factory.bin",
+          "path": "firmware-v2.0.3.factory.bin",
           "offset": 0
         }
       ]
