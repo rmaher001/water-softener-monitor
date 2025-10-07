@@ -1,6 +1,6 @@
 {
   "name": "Water Softener Salt Monitor",
-  "version": "2.1.0-minimal-test",
+  "version": "2.1.1-espidf-test",
   "home_assistant_domain": "esphome",
   "new_install_prompt_erase": true,
   "new_install_improv_wait_time": 20,
@@ -10,7 +10,7 @@
       "improv": true,
       "parts": [
         {
-          "path": "firmware-minimal-test.factory.bin",
+          "path": "firmware-espidf-test.factory.bin",
           "offset": 0
         }
       ]
