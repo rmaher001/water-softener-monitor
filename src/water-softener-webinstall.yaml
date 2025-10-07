@@ -11,14 +11,6 @@ esphome:
   name: ${device_name}
   friendly_name: "${friendly_name}"
   name_add_mac_suffix: true
-  project:
-    name: "water-softener.monitor"
-    version: "2.0.0"
-
-# Enable ESPHome Dashboard adoption for clean entity IDs
-dashboard_import:
-  package_import_url: github://rmaher001/water-softener-monitor/src/water-softener-package.yaml@master
-  import_full_config: false
 
 # Include the main package for all sensor/config logic
 packages:
