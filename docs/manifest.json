@@ -1,6 +1,6 @@
 {
   "name": "Water Softener Salt Monitor",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "home_assistant_domain": "esphome",
   "new_install_prompt_erase": false,
   "new_install_improv_wait_time": 0,
@@ -10,7 +10,7 @@
       "improv": true,
       "parts": [
         {
-          "path": "firmware-webinstall.factory.bin",
+          "path": "firmware-arduino-fixed.factory.bin",
           "offset": 0
         }
       ]
