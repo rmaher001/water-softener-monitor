@@ -6,11 +6,10 @@ substitutions:
   device_name: "water-softener"
   friendly_name: "Water Softener"
 
-# Override esphome section to add MAC suffix before package
+# Override esphome section - no MAC suffix for clean names
 esphome:
   name: ${device_name}
   friendly_name: "${friendly_name}"
-  name_add_mac_suffix: true
 
 # Include the main package for all sensor/config logic
 packages:

@@ -10,7 +10,7 @@
       "improv": true,
       "parts": [
         {
-          "path": "firmware-arduino-fixed.factory.bin",
+          "path": "firmware-clean.factory.bin",
           "offset": 0
         }
       ]
