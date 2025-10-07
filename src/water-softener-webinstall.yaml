@@ -11,13 +11,6 @@ esphome:
   name: ${device_name}
   friendly_name: "${friendly_name}"
   name_add_mac_suffix: true
-  project:
-    name: "rmaher001.water-softener-monitor"
-    version: "2.0.1"
-
-# Enable dashboard adoption
-dashboard_import:
-  package_import_url: github://rmaher001/water-softener-monitor/src/water-softener-package.yaml@master
 
 # Include the main package for all sensor/config logic
 packages:
