@@ -34,9 +34,6 @@ logger:
 # Enable Home Assistant API
 api:
 
-# Enable mDNS for auto-discovery
-mdns:
-
 # Enable OTA updates
 ota:
   - platform: esphome
