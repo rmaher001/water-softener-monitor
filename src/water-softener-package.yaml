@@ -15,7 +15,7 @@ esp32:
   board: m5stack-atoms3
   variant: esp32s3
   framework:
-    type: arduino
+    type: esp-idf
 
 # WiFi configuration moved to individual config files
 # (water-softener-dev.yaml, water-softener-webinstall.yaml, water-softener.yaml)
