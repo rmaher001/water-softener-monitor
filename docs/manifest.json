@@ -1,6 +1,6 @@
 {
   "name": "Water Softener Salt Monitor",
-  "version": "3.3.0",
+  "version": "4.0.0",
   "home_assistant_domain": "esphome",
   "new_install_prompt_erase": false,
   "new_install_improv_wait_time": 0,
@@ -10,7 +10,7 @@
       "improv": true,
       "parts": [
         {
-          "path": "firmware-clean.factory.bin",
+          "path": "firmware-ble.factory.bin",
           "offset": 0
         }
       ]
