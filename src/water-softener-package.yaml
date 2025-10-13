@@ -42,12 +42,7 @@ logger:
   baud_rate: 115200
   deassert_rts_dtr: true  # Required for ESP32-S3 USB CDC compatibility
 
-# Enable Home Assistant API
-api:
-
-# Enable OTA updates
-ota:
-  - platform: esphome
+# API and OTA are configured in individual device files
 
 # Web server for direct browser access
 web_server:
