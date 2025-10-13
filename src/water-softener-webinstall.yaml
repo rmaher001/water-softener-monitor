@@ -3,17 +3,18 @@
 # Uses generic name with MAC suffix for unique device names
 
 substitutions:
-  device_name: "water-softener"
-  friendly_name: "Water Softener"
+  name: "water-softener-monitor"
+  version: "1.0.0"
 
 # Override esphome section with MAC suffix for unique device names
 esphome:
-  name: ${device_name}
-  friendly_name: "${friendly_name}"
+  name: "${name}"
+  friendly_name: Water Softener Monitor
+  comment: Water Softener Monitor
   name_add_mac_suffix: true
   project:
     name: "rmaher001.water-softener-monitor"
-    version: "4.0.0"
+    version: "${version}"
 
 # Dashboard import for ESPHome Dashboard integration and updates
 dashboard_import:
@@ -24,9 +25,7 @@ dashboard_import:
 packages:
   water_softener: !include water-softener-package.yaml
 
-# WiFi configured via Improv Serial - no hard-coded credentials
 wifi:
+  power_save_mode: none
   ap:
     ssid: "Water Softener"
-    password: "12345678"
-    ap_timeout: 0s  # Never timeout AP mode
