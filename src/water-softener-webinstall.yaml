@@ -6,10 +6,19 @@ substitutions:
   device_name: "water-softener"
   friendly_name: "Water Softener"
 
-# Override esphome section - no MAC suffix for clean names
+# Override esphome section with MAC suffix for unique device names
 esphome:
   name: ${device_name}
   friendly_name: "${friendly_name}"
+  name_add_mac_suffix: true
+  project:
+    name: "rmaher001.water-softener-monitor"
+    version: "4.0.0"
+
+# Dashboard import for ESPHome Dashboard integration and updates
+dashboard_import:
+  package_import_url: github://rmaher001/water-softener-monitor/src/water-softener-webinstall.yaml@master
+  import_full_config: true
 
 # Include the main package for all sensor/config logic
 packages:
