@@ -25,6 +25,12 @@ dashboard_import:
 packages:
   water_softener: !include water-softener-package.yaml
 
+# API and OTA for Home Assistant integration
+api:
+
+ota:
+  - platform: esphome
+
 wifi:
   power_save_mode: none
   ap:
