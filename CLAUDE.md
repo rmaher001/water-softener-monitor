@@ -151,3 +151,50 @@ ESPHome update notifications are ONLY for ESPHome platform updates (e.g., ESPHom
 - Documentation and release tracking
 - Manual identification by users
 - NOT for automatic update detection
+
+## CRITICAL: GitHub Package Import Syntax
+
+**CORRECT SYNTAX FOR IMPORTING PACKAGES FROM GITHUB:**
+
+The web installer files (`water-softener-webinstall-simple.yaml` and `water-softener-webinstall-multi.yaml`) use the correct shorthand syntax:
+
+```yaml
+packages:
+  water_softener: github://rmaher001/water-softener-monitor/src/water-softener-package.yaml@master
+```
+
+**After ESPHome Dashboard adoption, users MUST keep this same syntax in their adopted YAML.**
+
+**WRONG SYNTAX (DO NOT USE):**
+```yaml
+# WRONG - !include is for LOCAL files, NOT remote packages
+packages:
+  water_softener: !include
+    url: https://github.com/...
+    ref: master
+    file: src/water-softener-package.yaml
+    refresh: 0s
+```
+
+**Alternative valid syntax (if refresh control is needed):**
+```yaml
+packages:
+  water_softener:
+    url: https://github.com/rmaher001/water-softener-monitor
+    files: [src/water-softener-package.yaml]
+    ref: master
+    refresh: 0s
+```
+
+**Common Issue:**
+When users report "device not getting latest code" or "getting old version after update":
+1. Check their adopted device YAML in ESPHome Dashboard
+2. Verify the `packages:` section uses correct syntax (shorthand or mapping, NO `!include`)
+3. If using mapping syntax without `refresh`, packages are cached indefinitely
+4. The shorthand `github://...@master` always pulls from the specified branch
+
+**Package Caching:**
+- ESPHome caches downloaded packages locally
+- Default behavior: cache is reused unless `refresh` parameter is set
+- Shorthand syntax caches but updates are available by re-compiling
+- To force refresh: use mapping syntax with `refresh: 0s` or delete ESPHome's package cache
