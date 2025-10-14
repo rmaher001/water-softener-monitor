@@ -30,20 +30,39 @@ Flash firmware directly from your browser - no software installation required:
 
 **👉 [Open Web Installer](https://rmaher001.github.io/water-softener-monitor/)**
 
-Requirements:
-- Chrome or Edge browser
-- USB-C cable
-- Takes 5 minutes!
+**Two Installation Options:**
+
+1. **Simple Install** (Recommended for most users)
+   - For users with **ONE** water softener
+   - Clean entity IDs without MAC suffix
+   - Example: `sensor.water_softener_monitor_salt_level`
+   - No renaming needed!
+
+2. **Multi-Device Install**
+   - For users with **MULTIPLE** water softeners
+   - Unique entity IDs with MAC suffix
+   - Example: `sensor.water_softener_monitor_954910_salt_level`
+   - Prevents conflicts between multiple devices
 
 **Setup Process:**
-1. Flash the device using the web installer
-2. **Configure WiFi** using one of these methods:
-   - **Bluetooth (Improv BLE)**: Use the Home Assistant app on your phone to configure WiFi wirelessly
-   - **WiFi Hotspot**: Connect to "Water Softener Hotspot" and configure via web browser
-3. **Adopt in ESPHome Dashboard**: The device will appear in your ESPHome dashboard - click "Adopt" to add it
-4. **Connect to Home Assistant**: After adoption, it auto-discovers in Home Assistant - no API keys needed!
+1. Connect ATOM S3 via USB-C
+2. Choose your installation type (Simple or Multi-Device)
+3. Flash the device using the web installer
+4. Configure WiFi using Home Assistant app (Bluetooth) or connect to "Water Softener Hotspot"
+5. Device auto-discovers in Home Assistant - works immediately!
 
-This follows the same simple setup pattern used by commercial ESPHome devices.
+---
+
+### Optional: ESPHome Dashboard Management
+
+If you want to manage your device from ESPHome Dashboard or customize entity IDs:
+
+1. **Adopt in ESPHome Dashboard** - Device appears, click "Adopt"
+2. **For Clean Entity IDs** (if you used Multi-Device install):
+   - Delete device from Home Assistant first
+   - Edit in ESPHome Dashboard, remove MAC suffix
+   - Reinstall and re-add to Home Assistant
+   - See detailed instructions in our setup guide
 
 ---
 
@@ -90,9 +109,12 @@ All parameters adjustable via web interface (no reflashing needed):
 ## Project Structure
 
 - `src/water-softener-package.yaml` - Core functionality (sensors, thresholds, logic)
-- `src/water-softener-webinstall.yaml` - Web installer configuration
+- `src/water-softener-webinstall-simple.yaml` - Simple web installer (no MAC suffix)
+- `src/water-softener-webinstall-multi.yaml` - Multi-device web installer (with MAC suffix)
 - `src/water-softener-dev.yaml` - Development/testing configuration
 - `docs/` - Web installer files
+  - `firmware-simple.factory.bin` - Single device firmware
+  - `firmware-multi.factory.bin` - Multi-device firmware
 
 ## How It Works
 

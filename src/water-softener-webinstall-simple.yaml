@@ -1,24 +1,24 @@
-# Water Softener Monitor - Web Installer Config
-# This config is used to build firmware for the web installer
-# Uses generic name with MAC suffix for unique device names
+# Water Softener Monitor - Simple Web Installer Config
+# For users with a SINGLE device - no MAC suffix, clean entity IDs
+# This is the recommended install for most users
 
 substitutions:
   name: "water-softener-monitor"
   version: "1.0.0"
 
-# Override esphome section with MAC suffix for unique device names
+# Simple setup - NO MAC suffix for clean entity IDs
 esphome:
   name: "${name}"
   friendly_name: Water Softener Monitor
   comment: Water Softener Monitor
-  name_add_mac_suffix: true
+  name_add_mac_suffix: false  # NO suffix - clean entity IDs!
   project:
     name: "rmaher001.water-softener-monitor"
     version: "${version}"
 
 # Dashboard import for ESPHome Dashboard integration and updates
 dashboard_import:
-  package_import_url: github://rmaher001/water-softener-monitor/src/water-softener-webinstall.yaml@master
+  package_import_url: github://rmaher001/water-softener-monitor/src/water-softener-webinstall-simple.yaml@master
   import_full_config: false
 
 # Include the main package for all sensor/config logic
@@ -28,7 +28,7 @@ packages:
 # API for Home Assistant integration
 api:
 
-# OTA updates - no password like Apollo MSR-2
+# OTA updates - no password for easy management
 ota:
   - platform: esphome
 

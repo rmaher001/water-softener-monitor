@@ -86,7 +86,7 @@
     </ul>
   </div>
 
-  <h2>Installation Steps</h2>
+  <h2>Choose Your Installation</h2>
 
   <div class="step">
     <span class="step-number">1</span>
@@ -96,19 +96,48 @@
 
   <div class="step">
     <span class="step-number">2</span>
-    <strong>Flash Firmware</strong><br>
-    Click the button below and select your device's serial port
+    <strong>Choose Installation Type</strong><br>
+    Select based on your needs:
   </div>
 
-  <div class="install-section">
-    <div style="background: #ff6b6b; color: white; padding: 10px; border-radius: 5px; margin-bottom: 20px;">
-      <strong>⚠️ Known Issue (Mac):</strong> Chrome may crash when installation reaches 100%. This is normal - the firmware is successfully installed. Simply unplug and replug the device after the crash.
+  <div style="display: flex; gap: 20px; justify-content: center; flex-wrap: wrap;">
+
+    <!-- Simple Install Option -->
+    <div class="install-section" style="flex: 1; min-width: 300px;">
+      <h3 style="color: #27ae60;">✅ Simple Install (Recommended)</h3>
+      <p><strong>For users with ONE device</strong></p>
+      <ul style="text-align: left; margin: 10px 0;">
+        <li>Clean entity IDs (no MAC suffix)</li>
+        <li>Example: <code>sensor.water_softener_monitor_salt_level</code></li>
+        <li>No renaming needed</li>
+      </ul>
+      <esp-web-install-button manifest="./manifest-simple.json">
+        <button slot="activate" style="padding: 15px 30px; font-size: 16px; background: #27ae60; color: white; border: none; border-radius: 5px; cursor: pointer;">
+          Install Simple Version
+        </button>
+      </esp-web-install-button>
     </div>
-    <esp-web-install-button manifest="./manifest.json">
-      <button slot="activate" style="padding: 15px 30px; font-size: 18px; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer;">
-        Install Firmware
-      </button>
-    </esp-web-install-button>
+
+    <!-- Multi-Device Install Option -->
+    <div class="install-section" style="flex: 1; min-width: 300px;">
+      <h3 style="color: #e67e22;">🔧 Multi-Device Install</h3>
+      <p><strong>For users with MULTIPLE devices</strong></p>
+      <ul style="text-align: left; margin: 10px 0;">
+        <li>Unique entity IDs (with MAC suffix)</li>
+        <li>Example: <code>sensor.water_softener_monitor_954910_salt_level</code></li>
+        <li>Can be renamed later if desired</li>
+      </ul>
+      <esp-web-install-button manifest="./manifest-multi.json">
+        <button slot="activate" style="padding: 15px 30px; font-size: 16px; background: #e67e22; color: white; border: none; border-radius: 5px; cursor: pointer;">
+          Install Multi-Device Version
+        </button>
+      </esp-web-install-button>
+    </div>
+
+  </div>
+
+  <div style="background: #ff6b6b; color: white; padding: 10px; border-radius: 5px; margin: 20px auto;">
+    <strong>⚠️ Known Issue (Mac):</strong> Chrome may crash when installation reaches 100%. This is normal - the firmware is successfully installed. Simply unplug and replug the device after the crash.
   </div>
 
   <div class="step">

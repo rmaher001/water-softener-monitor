@@ -1,0 +1,38 @@
+# Water Softener Monitor - Multi-Device Web Installer Config
+# For users with MULTIPLE devices - includes MAC suffix for unique names
+# Use this if you plan to have more than one water softener monitor
+
+substitutions:
+  name: "water-softener-monitor"
+  version: "1.0.0"
+
+# Override esphome section with MAC suffix for unique device names
+esphome:
+  name: "${name}"
+  friendly_name: Water Softener Monitor
+  comment: Water Softener Monitor
+  name_add_mac_suffix: true
+  project:
+    name: "rmaher001.water-softener-monitor"
+    version: "${version}"
+
+# Dashboard import for ESPHome Dashboard integration and updates
+dashboard_import:
+  package_import_url: github://rmaher001/water-softener-monitor/src/water-softener-webinstall-multi.yaml@master
+  import_full_config: false
+
+# Include the main package for all sensor/config logic
+packages:
+  water_softener: !include water-softener-package.yaml
+
+# API for Home Assistant integration
+api:
+
+# OTA updates - no password like Apollo MSR-2
+ota:
+  - platform: esphome
+
+wifi:
+  power_save_mode: none
+  ap:
+    ssid: "Water Softener Hotspot"
