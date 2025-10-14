@@ -25,13 +25,14 @@ dashboard_import:
 packages:
   water_softener: !include water-softener-package.yaml
 
-# API and OTA for Home Assistant integration
+# API for Home Assistant integration
 api:
 
+# OTA updates - no password like Apollo MSR-2
 ota:
   - platform: esphome
 
 wifi:
   power_save_mode: none
   ap:
-    ssid: "Water Softener"
+    ssid: "Water Softener Hotspot"
