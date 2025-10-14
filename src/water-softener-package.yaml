@@ -270,6 +270,9 @@ sensor:
     filters:
       - multiply: 100  # Convert meters to cm
       - filter_out: nan
+      - sliding_window_moving_average:
+          window_size: 10
+          send_every: 1
     on_value:
       then:
         - component.update: salt_level_percent
