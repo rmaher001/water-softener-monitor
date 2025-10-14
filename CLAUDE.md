@@ -130,3 +130,24 @@ Fallback AP: "Softener-Fallback" / "12345678"
 ## Sensor Update Strategy
 
 The distance sensor uses `update_interval: never` and is manually triggered by the interval component. This allows for dynamic update intervals controlled by the `update_interval_seconds` parameter without recompiling firmware.
+
+## CRITICAL: Firmware Update Notifications
+
+**THERE ARE NO AUTOMATIC UPDATE NOTIFICATIONS FOR CUSTOM PROJECT FIRMWARE VERSIONS.**
+
+ESPHome update notifications are ONLY for ESPHome platform updates (e.g., ESPHome 2024.8.0 → 2024.9.0), NOT for custom project firmware updates (e.g., water-softener-monitor 1.0.0 → 1.1.0).
+
+**The `dashboard_import` and `project` sections:**
+- Are for device adoption and importing from web installers
+- Do NOT provide update notifications for custom firmware versions
+- Only help ESPHome Dashboard discover and adopt devices initially
+
+**How users update to newer firmware versions:**
+- Users MUST manually check ESPHome Dashboard
+- Users MUST manually click "Install" to pull latest version from GitHub
+- There is NO mechanism to notify users "water softener v1.1.0 is available"
+
+**Version numbering (e.g., 1.1.0) is for:**
+- Documentation and release tracking
+- Manual identification by users
+- NOT for automatic update detection
