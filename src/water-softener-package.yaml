@@ -79,35 +79,6 @@ globals:
     type: std::string
     restore_value: yes
     initial_value: '"Checking..."'
-  # Persistent settings
-  - id: g_tank_height_cm
-    type: float
-    restore_value: yes
-    initial_value: '100'
-  - id: g_full_level_cm
-    type: float
-    restore_value: yes
-    initial_value: '20'
-  - id: g_update_interval_seconds
-    type: float
-    restore_value: yes
-    initial_value: '20'
-  - id: g_critical_threshold
-    type: float
-    restore_value: yes
-    initial_value: '20'
-  - id: g_full_threshold
-    type: float
-    restore_value: yes
-    initial_value: '80'
-  - id: g_good_threshold
-    type: float
-    restore_value: yes
-    initial_value: '60'
-  - id: g_low_threshold
-    type: float
-    restore_value: yes
-    initial_value: '40'
 
 # Configurable settings
 number:
@@ -115,11 +86,9 @@ number:
   - platform: template
     name: "Tank Height"
     id: tank_height_cm
-    lambda: return id(g_tank_height_cm);
-    set_action:
-      - lambda: |-
-          id(g_tank_height_cm) = x;
-          id(tank_height_cm).publish_state(x);
+    optimistic: true
+    restore_value: true
+    initial_value: 100
     min_value: 30
     max_value: 150
     step: 1
@@ -135,11 +104,9 @@ number:
   - platform: template
     name: "Full Level Distance"
     id: full_level_cm
-    lambda: return id(g_full_level_cm);
-    set_action:
-      - lambda: |-
-          id(g_full_level_cm) = x;
-          id(full_level_cm).publish_state(x);
+    optimistic: true
+    restore_value: true
+    initial_value: 20
     min_value: 5
     max_value: 50
     step: 1
@@ -155,11 +122,9 @@ number:
   - platform: template
     name: "Update Interval"
     id: update_interval_seconds
-    lambda: return id(g_update_interval_seconds);
-    set_action:
-      - lambda: |-
-          id(g_update_interval_seconds) = x;
-          id(update_interval_seconds).publish_state(x);
+    optimistic: true
+    restore_value: true
+    initial_value: 20
     min_value: 1
     max_value: 86400
     step: 1
@@ -173,11 +138,9 @@ number:
   - platform: template
     name: "Critical Alert Threshold"
     id: critical_threshold
-    lambda: return id(g_critical_threshold);
-    set_action:
-      - lambda: |-
-          id(g_critical_threshold) = x;
-          id(critical_threshold).publish_state(x);
+    optimistic: true
+    restore_value: true
+    initial_value: 20
     min_value: 0
     max_value: 100
     step: 5
@@ -193,11 +156,9 @@ number:
   - platform: template
     name: "Full Threshold"
     id: full_threshold
-    lambda: return id(g_full_threshold);
-    set_action:
-      - lambda: |-
-          id(g_full_threshold) = x;
-          id(full_threshold).publish_state(x);
+    optimistic: true
+    restore_value: true
+    initial_value: 80
     min_value: 0
     max_value: 100
     step: 5
@@ -213,11 +174,9 @@ number:
   - platform: template
     name: "Good Threshold"
     id: good_threshold
-    lambda: return id(g_good_threshold);
-    set_action:
-      - lambda: |-
-          id(g_good_threshold) = x;
-          id(good_threshold).publish_state(x);
+    optimistic: true
+    restore_value: true
+    initial_value: 60
     min_value: 0
     max_value: 100
     step: 5
@@ -233,11 +192,9 @@ number:
   - platform: template
     name: "Low Alert Threshold"
     id: low_threshold
-    lambda: return id(g_low_threshold);
-    set_action:
-      - lambda: |-
-          id(g_low_threshold) = x;
-          id(low_threshold).publish_state(x);
+    optimistic: true
+    restore_value: true
+    initial_value: 40
     min_value: 0
     max_value: 100
     step: 5

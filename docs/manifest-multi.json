@@ -1,6 +1,6 @@
 {
   "name": "Water Softener Monitor (Multi-Device)",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "home_assistant_domain": "esphome",
   "new_install_prompt_erase": false,
   "new_install_improv_wait_time": 0,
