@@ -23,7 +23,7 @@ dashboard_import:
 
 # Include the main package for all sensor/config logic
 packages:
-  water_softener: !include water-softener-package.yaml
+  water_softener: github://rmaher001/water-softener-monitor/src/water-softener-package.yaml@master
 
 # API for Home Assistant integration
 api:
