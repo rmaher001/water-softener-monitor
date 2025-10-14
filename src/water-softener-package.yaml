@@ -55,6 +55,9 @@ web_server:
     - id: alert_thresholds
       name: "Alert Thresholds"
       sorting_weight: 20
+    - id: system
+      name: "System"
+      sorting_weight: 30
 
 # I2C for the ToF sensor (ATOM S3 Lite Grove port)
 i2c:
@@ -207,12 +210,12 @@ switch:
     icon: "mdi:ruler"
     optimistic: true
     web_server:
-      sorting_group_id: measurement_settings
+      sorting_group_id: system
     on_turn_on:
       - delay: 300s  # 5 minutes
       - switch.turn_off: calibration_mode
 
-# Reset button
+# Buttons
 button:
   - platform: template
     name: "Reset to Defaults"
@@ -247,6 +250,12 @@ button:
       - number.set:
           id: critical_threshold
           value: 20
+
+  - platform: restart
+    name: "Restart"
+    icon: "mdi:restart"
+    web_server:
+      sorting_group_id: system
 
 # VL53L0X Distance Sensor
 sensor:
@@ -311,6 +320,14 @@ sensor:
       id(last_valid_percentage) = percentage;
       return percentage;
 
+  # WiFi signal strength
+  - platform: wifi_signal
+    name: "WiFi Signal"
+    update_interval: 60s
+    icon: "mdi:wifi"
+    web_server:
+      sorting_group_id: system
+
 # Binary sensors
 binary_sensor:
   # Button for BLE Improv authorization (ATOM S3 button on GPIO41)
@@ -329,6 +346,8 @@ binary_sensor:
     name: "Sensor Out of Range"
     id: sensor_out_of_range
     icon: "mdi:alert-circle"
+    web_server:
+      sorting_group_id: system
     lambda: |-
       // VL53L0X sensor hardware limits
       const float SENSOR_MIN_RANGE = 3.0;   // cm
@@ -347,13 +366,6 @@ binary_sensor:
         return true;
       }
       return false;  // Valid reading
-
-  - platform: template
-    name: "Calibration Active"
-    id: calibration_active
-    icon: "mdi:speedometer"
-    lambda: |-
-      return id(calibration_mode).state;
 
 # Status text
 text_sensor:
