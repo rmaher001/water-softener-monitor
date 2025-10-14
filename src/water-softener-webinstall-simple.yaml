@@ -4,7 +4,7 @@
 
 substitutions:
   name: "water-softener-monitor"
-  version: "1.2.4"
+  version: "1.2.5"
 
 # Simple setup - NO MAC suffix for clean entity IDs
 esphome:

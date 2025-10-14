@@ -15,7 +15,7 @@ esp32:
 
 esphome:
   on_boot:
-    priority: 600
+    priority: -100
     then:
       - number.set:
           id: tank_height_cm
@@ -67,6 +67,8 @@ light:
 logger:
   baud_rate: 115200
   deassert_rts_dtr: true  # Required for ESP32-S3 USB CDC compatibility
+  logs:
+    esp32.preferences: DEBUG  # Show flash write operations
 
 # API and OTA are configured in individual device files
 
@@ -119,7 +121,7 @@ globals:
 
     initial_value: '"Checking..."'
 
-  # Persistent settings
+  # Persistent settings globals
 
   - id: g_tank_height_cm
 
@@ -193,7 +195,7 @@ number:
 
     optimistic: true
 
-    restore_value: true
+    restore_value: false
 
     initial_value: 100
 
@@ -231,7 +233,7 @@ number:
 
     optimistic: true
 
-    restore_value: true
+    restore_value: false
 
     initial_value: 20
 
@@ -269,7 +271,7 @@ number:
 
     optimistic: true
 
-    restore_value: true
+    restore_value: false
 
     initial_value: 20
 
@@ -305,7 +307,7 @@ number:
 
     optimistic: true
 
-    restore_value: true
+    restore_value: false
 
     initial_value: 20
 
@@ -343,7 +345,7 @@ number:
 
     optimistic: true
 
-    restore_value: true
+    restore_value: false
 
     initial_value: 80
 
@@ -381,7 +383,7 @@ number:
 
     optimistic: true
 
-    restore_value: true
+    restore_value: false
 
     initial_value: 60
 
@@ -419,7 +421,7 @@ number:
 
     optimistic: true
 
-    restore_value: true
+    restore_value: false
 
     initial_value: 40
 
