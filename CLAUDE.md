@@ -121,8 +121,7 @@ Fallback AP: "Softener-Fallback" / "12345678"
 
 ## Deployment Model
 
-Follows the Apollo MSR-2 pattern:
-1. Web installer firmware has NO encryption/passwords
+1. Web installer firmware has NO encryption/passwords for easy setup
 2. User flashes device and configures WiFi via Improv BLE or hotspot
 3. ESPHome Dashboard discovers and adopts the device
 4. Adoption process adds API encryption and OTA password automatically

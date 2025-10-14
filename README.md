@@ -43,7 +43,7 @@ Requirements:
 3. **Adopt in ESPHome Dashboard**: The device will appear in your ESPHome dashboard - click "Adopt" to add it
 4. **Connect to Home Assistant**: After adoption, it auto-discovers in Home Assistant - no API keys needed!
 
-This follows the same simple setup pattern as commercial devices like the Apollo MSR-2.
+This follows the same simple setup pattern used by commercial ESPHome devices.
 
 ---
 
