@@ -13,9 +13,9 @@ esp32:
   framework:
     type: esp-idf
 
-# Preferences for immediate flash writes
+# Preferences with debounced flash writes to prevent overwhelming the system
 preferences:
-  flash_write_interval: 0s
+  flash_write_interval: 5s
 
 # WiFi configuration moved to individual config files
 # (water-softener-dev.yaml, water-softener-webinstall.yaml, water-softener.yaml)
