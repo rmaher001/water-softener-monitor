@@ -102,7 +102,7 @@
 
   <div class="install-section">
     <div style="background: #ff6b6b; color: white; padding: 10px; border-radius: 5px; margin-bottom: 20px;">
-      <strong>⚠️ Known Issue:</strong> Chrome may crash when installation reaches 100%. This is normal - the firmware is successfully installed. Simply unplug and replug the device after the crash.
+      <strong>⚠️ Known Issue (Mac):</strong> Chrome may crash when installation reaches 100%. This is normal - the firmware is successfully installed. Simply unplug and replug the device after the crash.
     </div>
     <esp-web-install-button manifest="./manifest.json">
       <button slot="activate" style="padding: 15px 30px; font-size: 18px; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer;">
@@ -113,16 +113,14 @@
 
   <div class="step">
     <span class="step-number">3</span>
-    <strong>Configure WiFi via Bluetooth</strong><br>
-    <strong>Option A:</strong> Use Home Assistant app (iOS/Android):
+    <strong>Configure WiFi</strong><br>
+    Use Home Assistant app (iOS/Android):
     <ul style="text-align: left; margin: 10px 0;">
-      <li>Press button on ATOM S3 to enable BLE</li>
+      <li>Press button on ATOM S3 to enable Bluetooth pairing</li>
       <li>Open HA app → Settings → Devices → Add Device</li>
-      <li>Select "ESPHome" and follow prompts</li>
+      <li>Select "ESPHome" and follow prompts to enter WiFi credentials</li>
     </ul>
-    <strong>Option B:</strong> Use <a href="https://www.improv-wifi.com/" target="_blank">Improv WiFi website</a> (Chrome/Edge with Bluetooth)
-    <br>
-    <strong>Option C:</strong> Keep USB connected and use <a href="https://www.improv-wifi.com/" target="_blank">Serial Improv Tool</a>
+    <em>Alternative: Connect to "Water Softener Hotspot" WiFi if device creates one</em>
   </div>
 
   <div class="step">
