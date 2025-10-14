@@ -16,9 +16,11 @@ This is an ESPHome-based water softener salt level monitoring system running on 
 
 ## Key Architecture
 
-### Main Configuration File
+### Configuration Files
 
-All configuration is in `src/water-softener.yaml` - this is a single-file ESPHome YAML configuration with no custom components.
+- `src/water-softener-package.yaml` - Core functionality with all sensors and logic
+- `src/water-softener-webinstall.yaml` - Web installer configuration (no encryption, uses Improv BLE)
+- `src/water-softener-dev.yaml` - Development configuration for local testing
 
 ### Core Logic Flow
 
@@ -76,34 +78,28 @@ The project uses four lambda functions:
 
 ## Common Commands
 
-### Validate Configuration
+### For Development (using dev config)
 ```bash
-esphome config src/water-softener.yaml
+# Validate Configuration
+esphome config src/water-softener-dev.yaml
+
+# Compile Firmware
+esphome compile src/water-softener-dev.yaml
+
+# Upload via USB
+esphome upload src/water-softener-dev.yaml --device /dev/ttyUSB0
+
+# View Logs
+esphome logs src/water-softener-dev.yaml
+
+# Run Full Pipeline (compile + upload + logs)
+esphome run src/water-softener-dev.yaml
 ```
 
-### Compile Firmware
+### For Web Installer Build
 ```bash
-esphome compile src/water-softener.yaml
-```
-
-### Upload to Device (OTA)
-```bash
-esphome upload src/water-softener.yaml
-```
-
-### Upload via USB
-```bash
-esphome upload src/water-softener.yaml --device /dev/ttyUSB0
-```
-
-### View Logs
-```bash
-esphome logs src/water-softener.yaml
-```
-
-### Run Full Pipeline (compile + upload + logs)
-```bash
-esphome run src/water-softener.yaml
+# Compile Web Installer Firmware
+esphome compile src/water-softener-webinstall.yaml
 ```
 
 ## WiFi Configuration
@@ -118,9 +114,19 @@ Fallback AP: "Softener-Fallback" / "12345678"
 
 ## Integrations
 
-- **Home Assistant**: API enabled for native integration
+- **Home Assistant**: API enabled for native integration (no encryption in webinstaller, added during ESPHome adoption)
 - **Web Server**: Available on port 80 for direct browser access
-- **OTA Updates**: Enabled for wireless firmware updates
+- **OTA Updates**: Enabled for wireless firmware updates (no password in webinstaller, added during ESPHome adoption)
+- **Improv BLE/Serial**: Enabled for easy WiFi configuration
+
+## Deployment Model
+
+Follows the Apollo MSR-2 pattern:
+1. Web installer firmware has NO encryption/passwords
+2. User flashes device and configures WiFi via Improv BLE or hotspot
+3. ESPHome Dashboard discovers and adopts the device
+4. Adoption process adds API encryption and OTA password automatically
+5. Device runs securely with user's own keys
 
 ## Sensor Update Strategy
 

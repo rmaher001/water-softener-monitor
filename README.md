@@ -24,7 +24,7 @@ ESPHome-based salt level monitor for water softener brine tanks using a VL53L0X 
 
 ## Installation
 
-### Quick Start - Web Installer (Easiest!)
+### Quick Start - Web Installer (Recommended!)
 
 Flash firmware directly from your browser - no software installation required:
 
@@ -35,48 +35,34 @@ Requirements:
 - USB-C cable
 - Takes 5 minutes!
 
-After flashing, the device creates a WiFi hotspot for configuration, then auto-discovers in Home Assistant.
+**Setup Process:**
+1. Flash the device using the web installer
+2. **Configure WiFi** using one of these methods:
+   - **Bluetooth (Improv BLE)**: Use the Home Assistant app on your phone to configure WiFi wirelessly
+   - **WiFi Hotspot**: Connect to "Water Softener Hotspot" and configure via web browser
+3. **Adopt in ESPHome Dashboard**: The device will appear in your ESPHome dashboard - click "Adopt" to add it
+4. **Connect to Home Assistant**: After adoption, it auto-discovers in Home Assistant - no API keys needed!
+
+This follows the same simple setup pattern as commercial devices like the Apollo MSR-2.
 
 ---
 
-### For End Users (Recommended - Auto-updates from GitHub)
+### Manual Installation (Advanced Users)
 
-**Your ESPHome config directory is:**
-- Home Assistant add-on: `/config/esphome/`
-- Standalone ESPHome: Your working directory where you run `esphome` commands
+**For Development/Testing:**
 
-1. **Create or update `secrets.yaml`** in your ESPHome config directory (skip if you already have WiFi credentials):
+1. Clone this repository
+2. Update `/Users/yourusername/esphome/secrets.yaml` with your WiFi credentials:
    ```yaml
-   # secrets.yaml
    wifi_ssid: "YourWiFiSSID"
    wifi_password: "YourWiFiPassword"
    ```
-
-2. **Copy `water-softener.yaml`** from this repo to your ESPHome config directory and customize if needed:
-   ```yaml
-   substitutions:
-     device_name: "water-softener"
-     friendly_name: "Water Softener Monitor"
-     wifi_ssid: !secret wifi_ssid
-     wifi_password: !secret wifi_password
-
-   packages:
-     water_softener: github://rmaher001/water-softener-monitor/src/water-softener-package.yaml@master
-   ```
-
-3. **Flash via USB first time**:
+3. Flash the development config:
    ```bash
-   esphome run water-softener.yaml --device /dev/ttyUSB0
+   esphome run src/water-softener-dev.yaml --device /dev/ttyUSB0
    ```
 
-4. **Future updates**: Device will show in Home Assistant ESPHome dashboard. Click "Update" to pull latest version from GitHub and flash OTA.
-
-### For Development
-
-1. Clone this repository
-2. Copy `secrets.yaml.example` to `secrets.yaml` and add WiFi credentials
-3. Edit `src/water-softener.yaml` directly
-4. Flash: `esphome run src/water-softener.yaml`
+**Note**: The webinstaller approach is recommended for most users as it handles encryption and configuration automatically through ESPHome Dashboard adoption.
 
 ## Configuration
 
@@ -96,6 +82,21 @@ All parameters adjustable via web interface (no reflashing needed):
 
 ## Integration
 
-- Home Assistant API enabled
-- Web interface on port 80
-- OTA updates supported
+- **Home Assistant**: Auto-discovery with ESPHome integration (no API key required after adoption)
+- **Web Interface**: Available on port 80 for direct browser access
+- **OTA Updates**: Supported through ESPHome Dashboard (no password required after adoption)
+- **Bluetooth**: Improv BLE for easy WiFi configuration
+
+## Project Structure
+
+- `src/water-softener-package.yaml` - Core functionality (sensors, thresholds, logic)
+- `src/water-softener-webinstall.yaml` - Web installer configuration
+- `src/water-softener-dev.yaml` - Development/testing configuration
+- `docs/` - Web installer files
+
+## How It Works
+
+1. **Initial Setup**: Device ships with no encryption (like commercial products)
+2. **WiFi Configuration**: Uses Improv BLE or fallback hotspot for easy setup
+3. **Adoption**: ESPHome Dashboard discovers and adopts the device, adding encryption
+4. **Operation**: Runs securely with automatic updates from GitHub
