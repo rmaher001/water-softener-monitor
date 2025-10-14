@@ -11,6 +11,10 @@ substitutions:
 packages:
   water_softener: !include water-softener-package.yaml
 
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+
 # WiFi configuration for development
 wifi:
   ssid: ${wifi_ssid}
