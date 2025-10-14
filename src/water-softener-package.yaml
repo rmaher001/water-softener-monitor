@@ -71,16 +71,43 @@ globals:
     type: unsigned long
     restore_value: no
     initial_value: '0'
-
   - id: last_valid_percentage
     type: float
     restore_value: yes
     initial_value: '0.0'
-
   - id: last_valid_status
     type: std::string
     restore_value: yes
     initial_value: '"Checking..."'
+  # Persistent settings
+  - id: g_tank_height_cm
+    type: float
+    restore_value: yes
+    initial_value: '100'
+  - id: g_full_level_cm
+    type: float
+    restore_value: yes
+    initial_value: '20'
+  - id: g_update_interval_seconds
+    type: float
+    restore_value: yes
+    initial_value: '20'
+  - id: g_critical_threshold
+    type: float
+    restore_value: yes
+    initial_value: '20'
+  - id: g_full_threshold
+    type: float
+    restore_value: yes
+    initial_value: '80'
+  - id: g_good_threshold
+    type: float
+    restore_value: yes
+    initial_value: '60'
+  - id: g_low_threshold
+    type: float
+    restore_value: yes
+    initial_value: '40'
 
 # Configurable settings
 number:
@@ -88,11 +115,14 @@ number:
   - platform: template
     name: "Tank Height"
     id: tank_height_cm
-    optimistic: true
+    lambda: return id(g_tank_height_cm);
+    set_action:
+      - lambda: |-
+          id(g_tank_height_cm) = x;
+          id(tank_height_cm).publish_state(x);
     min_value: 30
     max_value: 150
     step: 1
-    initial_value: 100
     unit_of_measurement: "cm"
     icon: "mdi:arrow-expand-vertical"
     mode: box
@@ -105,11 +135,14 @@ number:
   - platform: template
     name: "Full Level Distance"
     id: full_level_cm
-    optimistic: true
+    lambda: return id(g_full_level_cm);
+    set_action:
+      - lambda: |-
+          id(g_full_level_cm) = x;
+          id(full_level_cm).publish_state(x);
     min_value: 5
     max_value: 50
     step: 1
-    initial_value: 20
     unit_of_measurement: "cm"
     icon: "mdi:arrow-collapse-down"
     mode: box
@@ -122,11 +155,14 @@ number:
   - platform: template
     name: "Update Interval"
     id: update_interval_seconds
-    optimistic: true
+    lambda: return id(g_update_interval_seconds);
+    set_action:
+      - lambda: |-
+          id(g_update_interval_seconds) = x;
+          id(update_interval_seconds).publish_state(x);
     min_value: 1
     max_value: 86400
     step: 1
-    initial_value: 20
     unit_of_measurement: "s"
     icon: "mdi:timer"
     mode: box
@@ -137,11 +173,14 @@ number:
   - platform: template
     name: "Critical Alert Threshold"
     id: critical_threshold
-    optimistic: true
+    lambda: return id(g_critical_threshold);
+    set_action:
+      - lambda: |-
+          id(g_critical_threshold) = x;
+          id(critical_threshold).publish_state(x);
     min_value: 0
     max_value: 100
     step: 5
-    initial_value: 20
     unit_of_measurement: "%"
     icon: "mdi:alert-octagon"
     mode: slider
@@ -154,11 +193,14 @@ number:
   - platform: template
     name: "Full Threshold"
     id: full_threshold
-    optimistic: true
+    lambda: return id(g_full_threshold);
+    set_action:
+      - lambda: |-
+          id(g_full_threshold) = x;
+          id(full_threshold).publish_state(x);
     min_value: 0
     max_value: 100
     step: 5
-    initial_value: 80
     unit_of_measurement: "%"
     icon: "mdi:check-circle"
     mode: slider
@@ -171,11 +213,14 @@ number:
   - platform: template
     name: "Good Threshold"
     id: good_threshold
-    optimistic: true
+    lambda: return id(g_good_threshold);
+    set_action:
+      - lambda: |-
+          id(g_good_threshold) = x;
+          id(good_threshold).publish_state(x);
     min_value: 0
     max_value: 100
     step: 5
-    initial_value: 60
     unit_of_measurement: "%"
     icon: "mdi:check"
     mode: slider
@@ -188,11 +233,14 @@ number:
   - platform: template
     name: "Low Alert Threshold"
     id: low_threshold
-    optimistic: true
+    lambda: return id(g_low_threshold);
+    set_action:
+      - lambda: |-
+          id(g_low_threshold) = x;
+          id(low_threshold).publish_state(x);
     min_value: 0
     max_value: 100
     step: 5
-    initial_value: 40
     unit_of_measurement: "%"
     icon: "mdi:alert"
     mode: slider
