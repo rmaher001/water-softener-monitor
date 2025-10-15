@@ -49,20 +49,12 @@ logger:
 
 # API and OTA are configured in individual device files
 
-# Web server for direct browser access (fixed in ESPHome 2025.10.0)
-web_server:
-  version: 3
-  port: 80
-  sorting_groups:
-    - id: measurement_settings
-      name: "Measurement Settings"
-      sorting_weight: 10
-    - id: alert_thresholds
-      name: "Alert Thresholds"
-      sorting_weight: 20
-    - id: system
-      name: "System"
-      sorting_weight: 30
+# Web server disabled due to Arduino framework socket exhaustion (error 23)
+# - Arduino framework needed for NVS persistence on ESP32-S3
+# - Arduino has limited sockets (10-16) that can't be increased via config
+# - Web server exhausts sockets causing API/OTA failures and crashes
+# - Users can configure via Home Assistant UI instead
+# - To fix: would need ESP-IDF + increased CONFIG_LWIP_MAX_SOCKETS, but ESP-IDF breaks persistence
 
 # I2C for the ToF sensor (ATOM S3 Lite Grove port)
 i2c:
