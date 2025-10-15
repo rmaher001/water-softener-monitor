@@ -17,6 +17,32 @@ esp32:
 preferences:
   flash_write_interval: 5s
 
+esphome:
+  on_boot:
+    priority: 600
+    then:
+      - number.template.publish:
+          id: tank_height_cm
+          state: !lambda 'return id(g_tank_height_cm);'
+      - number.template.publish:
+          id: full_level_cm
+          state: !lambda 'return id(g_full_level_cm);'
+      - number.template.publish:
+          id: update_interval_seconds
+          state: !lambda 'return id(g_update_interval_seconds);'
+      - number.template.publish:
+          id: critical_threshold
+          state: !lambda 'return id(g_critical_threshold);'
+      - number.template.publish:
+          id: full_threshold
+          state: !lambda 'return id(g_full_threshold);'
+      - number.template.publish:
+          id: good_threshold
+          state: !lambda 'return id(g_good_threshold);'
+      - number.template.publish:
+          id: low_threshold
+          state: !lambda 'return id(g_low_threshold);'
+
 # WiFi configuration moved to individual config files
 # (water-softener-dev.yaml, water-softener-webinstall.yaml, water-softener.yaml)
 
@@ -43,15 +69,8 @@ light:
 
 # Enable logging
 logger:
-  level: DEBUG
   baud_rate: 115200
   deassert_rts_dtr: true  # Required for ESP32-S3 USB CDC compatibility
-  logs:
-    component: DEBUG
-    esp32.preferences: VERBOSE
-    preferences: VERBOSE
-    number: DEBUG
-    template.number: DEBUG
 
 # API and OTA are configured in individual device files
 
@@ -94,6 +113,42 @@ globals:
     restore_value: yes
     initial_value: '"Checking..."'
 
+  # Settings globals - these persist across reboots
+  - id: g_tank_height_cm
+    type: float
+    restore_value: yes
+    initial_value: '100'
+
+  - id: g_full_level_cm
+    type: float
+    restore_value: yes
+    initial_value: '20'
+
+  - id: g_update_interval_seconds
+    type: float
+    restore_value: yes
+    initial_value: '20'
+
+  - id: g_critical_threshold
+    type: float
+    restore_value: yes
+    initial_value: '20'
+
+  - id: g_full_threshold
+    type: float
+    restore_value: yes
+    initial_value: '80'
+
+  - id: g_good_threshold
+    type: float
+    restore_value: yes
+    initial_value: '60'
+
+  - id: g_low_threshold
+    type: float
+    restore_value: yes
+    initial_value: '40'
+
 
 
 # Configurable settings
@@ -106,9 +161,6 @@ number:
     name: "Tank Height"
     id: tank_height_cm
     entity_category: "config"
-    optimistic: true
-    restore_value: true
-    initial_value: 100
     min_value: 30
     max_value: 150
     step: 1
@@ -117,9 +169,12 @@ number:
     mode: box
     web_server:
       sorting_group_id: measurement_settings
-    on_value:
-      then:
-        - component.update: salt_level_percent
+    set_action:
+      - lambda: 'id(g_tank_height_cm) = x;'
+      - number.template.publish:
+          id: tank_height_cm
+          state: !lambda 'return x;'
+      - component.update: salt_level_percent
 
 
 
@@ -127,9 +182,6 @@ number:
     name: "Full Level Distance"
     id: full_level_cm
     entity_category: "config"
-    optimistic: true
-    restore_value: true
-    initial_value: 20
     min_value: 5
     max_value: 50
     step: 1
@@ -138,9 +190,12 @@ number:
     mode: box
     web_server:
       sorting_group_id: measurement_settings
-    on_value:
-      then:
-        - component.update: salt_level_percent
+    set_action:
+      - lambda: 'id(g_full_level_cm) = x;'
+      - number.template.publish:
+          id: full_level_cm
+          state: !lambda 'return x;'
+      - component.update: salt_level_percent
 
 
 
@@ -148,9 +203,6 @@ number:
     name: "Update Interval"
     id: update_interval_seconds
     entity_category: "config"
-    optimistic: true
-    restore_value: true
-    initial_value: 20
     min_value: 1
     max_value: 86400
     step: 1
@@ -159,6 +211,11 @@ number:
     mode: box
     web_server:
       sorting_group_id: measurement_settings
+    set_action:
+      - lambda: 'id(g_update_interval_seconds) = x;'
+      - number.template.publish:
+          id: update_interval_seconds
+          state: !lambda 'return x;'
 
 
 
@@ -168,9 +225,6 @@ number:
     name: "Critical Alert Threshold"
     id: critical_threshold
     entity_category: "config"
-    optimistic: true
-    restore_value: true
-    initial_value: 20
     min_value: 0
     max_value: 100
     step: 5
@@ -179,9 +233,12 @@ number:
     mode: slider
     web_server:
       sorting_group_id: alert_thresholds
-    on_value:
-      then:
-        - component.update: salt_status_text
+    set_action:
+      - lambda: 'id(g_critical_threshold) = x;'
+      - number.template.publish:
+          id: critical_threshold
+          state: !lambda 'return x;'
+      - component.update: salt_status_text
 
 
 
@@ -189,9 +246,6 @@ number:
     name: "Full Threshold"
     id: full_threshold
     entity_category: "config"
-    optimistic: true
-    restore_value: true
-    initial_value: 80
     min_value: 0
     max_value: 100
     step: 5
@@ -200,9 +254,12 @@ number:
     mode: slider
     web_server:
       sorting_group_id: alert_thresholds
-    on_value:
-      then:
-        - component.update: salt_status_text
+    set_action:
+      - lambda: 'id(g_full_threshold) = x;'
+      - number.template.publish:
+          id: full_threshold
+          state: !lambda 'return x;'
+      - component.update: salt_status_text
 
 
 
@@ -210,9 +267,6 @@ number:
     name: "Good Threshold"
     id: good_threshold
     entity_category: "config"
-    optimistic: true
-    restore_value: true
-    initial_value: 60
     min_value: 0
     max_value: 100
     step: 5
@@ -221,9 +275,12 @@ number:
     mode: slider
     web_server:
       sorting_group_id: alert_thresholds
-    on_value:
-      then:
-        - component.update: salt_status_text
+    set_action:
+      - lambda: 'id(g_good_threshold) = x;'
+      - number.template.publish:
+          id: good_threshold
+          state: !lambda 'return x;'
+      - component.update: salt_status_text
 
 
 
@@ -231,9 +288,6 @@ number:
     name: "Low Alert Threshold"
     id: low_threshold
     entity_category: "config"
-    optimistic: true
-    restore_value: true
-    initial_value: 40
     min_value: 0
     max_value: 100
     step: 5
@@ -242,9 +296,12 @@ number:
     mode: slider
     web_server:
       sorting_group_id: alert_thresholds
-    on_value:
-      then:
-        - component.update: salt_status_text
+    set_action:
+      - lambda: 'id(g_low_threshold) = x;'
+      - number.template.publish:
+          id: low_threshold
+          state: !lambda 'return x;'
+      - component.update: salt_status_text
 
 # Calibration mode switch
 switch:
