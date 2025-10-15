@@ -98,6 +98,7 @@ number:
   - platform: template
     name: "Tank Height"
     id: tank_height_cm
+    entity_category: "config"
     optimistic: true
     restore_value: true
     initial_value: 100
@@ -118,6 +119,7 @@ number:
   - platform: template
     name: "Full Level Distance"
     id: full_level_cm
+    entity_category: "config"
     optimistic: true
     restore_value: true
     initial_value: 20
@@ -138,6 +140,7 @@ number:
   - platform: template
     name: "Update Interval"
     id: update_interval_seconds
+    entity_category: "config"
     optimistic: true
     restore_value: true
     initial_value: 20
@@ -157,6 +160,7 @@ number:
   - platform: template
     name: "Critical Alert Threshold"
     id: critical_threshold
+    entity_category: "config"
     optimistic: true
     restore_value: true
     initial_value: 20
@@ -177,6 +181,7 @@ number:
   - platform: template
     name: "Full Threshold"
     id: full_threshold
+    entity_category: "config"
     optimistic: true
     restore_value: true
     initial_value: 80
@@ -197,6 +202,7 @@ number:
   - platform: template
     name: "Good Threshold"
     id: good_threshold
+    entity_category: "config"
     optimistic: true
     restore_value: true
     initial_value: 60
@@ -217,6 +223,7 @@ number:
   - platform: template
     name: "Low Alert Threshold"
     id: low_threshold
+    entity_category: "config"
     optimistic: true
     restore_value: true
     initial_value: 40
