@@ -1,13 +1,15 @@
 {
   "name": "Water Softener Monitor (Multi-Device)",
-  "version": "1.2.19",
+  "version": "1.2.20",
   "home_assistant_domain": "esphome",
   "new_install_prompt_erase": true,
+  "new_install_improv_wait_time": 0,
   "builds": [
     {
       "chipFamily": "ESP32-S3",
+      "improv": true,
       "parts": [
-        { "path": "water-softener-monitor-multi-v1.2.19.bin", "offset": 0 }
+        { "path": "water-softener-monitor-multi-v1.2.20.bin", "offset": 0 }
       ]
     }
   ]

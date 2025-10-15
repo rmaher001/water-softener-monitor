@@ -4,7 +4,7 @@
 
 substitutions:
   name: "water-softener-monitor"
-  version: "1.2.19"
+  version: "1.2.20"
 
 # Simple setup - NO MAC suffix for clean entity IDs
 esphome:
@@ -33,5 +33,8 @@ ota:
   - platform: esphome
 
 wifi:
+  power_save_mode: none
   ap:
     ssid: "Water Softener Hotspot"
+    password: "configme123"
+    ap_timeout: 0s

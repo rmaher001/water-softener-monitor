@@ -28,6 +28,8 @@ captive_portal:
 improv_serial:
 
 # Enable BLE Improv for wireless WiFi configuration
+# Uses 'none' authorizer - makes it easier for users during initial web installer setup
+# Security comes from eventual ESPHome Dashboard adoption with encryption
 esp32_improv:
   authorizer: none
 

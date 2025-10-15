@@ -77,30 +77,60 @@ The project uses four lambda functions:
 3. **Status text generation** (salt_status_text sensor): Maps percentage to status strings, stores last valid status
 4. **Update interval control** (interval component): Custom timing logic using globals and millis()
 
+### Calibration Mode
+
+**Calibration Mode** (`calibration_mode` switch) enables fast sensor polling for device setup and testing:
+- Turns on: Distance sensor updates every 100ms (instead of configured interval)
+- Auto-off: Automatically disables after 5 minutes to prevent excessive power use
+- Use for: Measuring initial distance values, troubleshooting sensor readings, testing threshold adjustments
+- Via UI: Toggle the "Calibration Mode" switch in Home Assistant or web interface
+
+### BLE Improv Configuration (v1.2.20+)
+
+**Finding**: The original `authorizer: setup_button` requirement created friction during web installer setup - users had to press the physical button to authorize WiFi configuration via Bluetooth.
+
+**Solution**: Changed to `authorizer: none` for seamless web installer experience while maintaining security:
+- BLE WiFi setup works immediately without button presses
+- Improv Serial provides alternative setup path if needed
+- WiFi hotspot fallback available ("Water Softener Hotspot")
+- Security enforced via ESPHome Dashboard adoption (adds encryption/passwords)
+- Tested and verified: BLE Improv works, Dashboard adoption successful
+
 ## Common Commands
+
+**ESPHome CLI Path**: `~/esphome/venv/bin/esphome` (or create an alias for faster access)
 
 ### For Development (using dev config)
 ```bash
 # Validate Configuration
-esphome config src/water-softener-dev.yaml
+~/esphome/venv/bin/esphome config src/water-softener-dev.yaml
 
 # Compile Firmware
-esphome compile src/water-softener-dev.yaml
+~/esphome/venv/bin/esphome compile src/water-softener-dev.yaml
 
-# Upload via USB
-esphome upload src/water-softener-dev.yaml --device /dev/ttyUSB0
+# Upload via OTA (to dev device at 192.168.86.104)
+~/esphome/venv/bin/esphome upload src/water-softener-dev.yaml --device 192.168.86.104
 
 # View Logs
-esphome logs src/water-softener-dev.yaml
+~/esphome/venv/bin/esphome logs src/water-softener-dev.yaml --device 192.168.86.104
 
 # Run Full Pipeline (compile + upload + logs)
-esphome run src/water-softener-dev.yaml
+~/esphome/venv/bin/esphome run src/water-softener-dev.yaml --device 192.168.86.104
+
+# Flash via USB (if OTA fails)
+~/esphome/venv/bin/esphome run src/water-softener-dev.yaml --device /dev/tty.usbmodem*
 ```
 
 ### For Web Installer Build
 ```bash
-# Compile Web Installer Firmware
-esphome compile src/water-softener-webinstall.yaml
+# Compile Simple Web Installer (single device, clean entity IDs)
+~/esphome/venv/bin/esphome compile src/water-softener-webinstall-simple.yaml
+
+# Compile Multi-Device Web Installer (multiple devices with MAC suffix)
+~/esphome/venv/bin/esphome compile src/water-softener-webinstall-multi.yaml
+
+# Copy firmware to docs directory for web installer release
+# (see DEVELOPMENT.md "Web Installer: Building Firmware for ESP Web Tools" section)
 ```
 
 ## WiFi Configuration
@@ -132,6 +162,18 @@ Fallback AP: "Softener-Fallback" / "12345678"
 ## Sensor Update Strategy
 
 The distance sensor uses `update_interval: never` and is manually triggered by the interval component. This allows for dynamic update intervals controlled by the `update_interval_seconds` parameter without recompiling firmware.
+
+## Development Workflow
+
+For comprehensive development guidance, see **DEVELOPMENT.md**, which covers:
+- **Local Development**: Fast iteration using `!include` for instant testing on dev hardware (192.168.86.104)
+- **Feature Branches**: Testing from GitHub branches before merging to `master`
+- **Deployment**: Releasing changes to all users via GitHub package imports
+- **Web Installer**: Building and releasing firmware binaries for the web installer
+- **Recovery**: Procedures for unbricking devices or fixing flashing issues
+- **Git Operations**: Branching, merging, and cleanup workflow
+
+**Key Principle**: All feature changes go in `src/water-softener-core.yaml` (the single source of truth). Other config files are just entry points that reference this core package.
 
 ## CRITICAL: Firmware Update Notifications
 
