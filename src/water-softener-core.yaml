@@ -29,18 +29,7 @@ improv_serial:
 
 # Enable BLE Improv for wireless WiFi configuration
 esp32_improv:
-  authorizer: setup_button
-
-# Status LED for BLE Improv feedback (ATOM S3 RGB LED)
-light:
-  - platform: esp32_rmt_led_strip
-    rgb_order: GRB
-    pin: GPIO35
-    num_leds: 1
-    chipset: ws2812
-    id: status_led
-    name: "Status LED"
-    internal: true  # Don't expose to HA
+  authorizer: none
 
 # Enable logging
 logger:
