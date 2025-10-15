@@ -9,7 +9,7 @@ substitutions:
 
 # For local development: Include package directly
 packages:
-  water_softener: !include water-softener-package.yaml
+  water_softener: !include water-softener-core.yaml
 
 esphome:
   name: ${device_name}
@@ -27,4 +27,4 @@ wifi:
 
 # For testing branches: Switch to this format
 # packages:
-#   water_softener: github://rmaher001/water-softener-monitor/src/water-softener-package.yaml@feature/branch-name
+#   water_softener: github://rmaher001/water-softener-monitor/src/water-softener-core.yaml@feature/branch-name

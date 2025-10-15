@@ -18,8 +18,9 @@ This is an ESPHome-based water softener salt level monitoring system running on 
 
 ### Configuration Files
 
-- `src/water-softener-package.yaml` - Core functionality with all sensors and logic
-- `src/water-softener-webinstall.yaml` - Web installer configuration (no encryption, uses Improv BLE)
+- `src/water-softener-core.yaml` - Core functionality with all sensors and logic
+- `src/water-softener-webinstall-simple.yaml` - Web installer configuration for single devices (no encryption, uses Improv BLE)
+- `src/water-softener-webinstall-multi.yaml` - Web installer configuration for multiple devices (adds MAC suffix)
 - `src/water-softener-dev.yaml` - Development configuration for local testing
 
 ### Core Logic Flow
@@ -168,14 +169,14 @@ Web installer files use `!include` for local file imports:
 ```yaml
 # water-softener-webinstall-simple.yaml
 packages:
-  water_softener: !include water-softener-package.yaml  # Local file, no remote caching
+  water_softener: !include water-softener-core.yaml  # Local file, no remote caching
 ```
 
 ### How It Works
 
 1. User flashes device via web installer
 2. ESPHome Dashboard discovers device via `dashboard_import`
-3. Dashboard fetches **both** webinstall-simple.yaml **and** water-softener-package.yaml from the same GitHub directory
+3. Dashboard fetches **both** webinstall-simple.yaml **and** water-softener-core.yaml from the same GitHub directory
 4. Files are treated as local includes - no separate package cache
 5. Updates work immediately when user clicks "Install" in Dashboard
 
@@ -184,7 +185,7 @@ packages:
 ```yaml
 # WRONG - Creates persistent cache that ignores updates
 packages:
-  water_softener: github://rmaher001/water-softener-monitor/src/water-softener-package.yaml@master
+  water_softener: github://rmaher001/water-softener-monitor/src/water-softener-core.yaml@master
 ```
 
 ```yaml
@@ -192,7 +193,7 @@ packages:
 packages:
   water_softener:
     url: https://github.com/rmaher001/water-softener-monitor
-    files: [src/water-softener-package.yaml]
+    files: [src/water-softener-core.yaml]
     ref: master
 ```
 
