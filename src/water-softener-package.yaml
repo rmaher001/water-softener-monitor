@@ -173,7 +173,7 @@ number:
       - lambda: 'id(g_tank_height_cm) = x;'
       - number.template.publish:
           id: tank_height_cm
-          state: !lambda 'return x;'
+          state: !lambda 'return id(g_tank_height_cm);'
       - component.update: salt_level_percent
 
 
@@ -194,7 +194,7 @@ number:
       - lambda: 'id(g_full_level_cm) = x;'
       - number.template.publish:
           id: full_level_cm
-          state: !lambda 'return x;'
+          state: !lambda 'return id(g_full_level_cm);'
       - component.update: salt_level_percent
 
 
@@ -215,7 +215,7 @@ number:
       - lambda: 'id(g_update_interval_seconds) = x;'
       - number.template.publish:
           id: update_interval_seconds
-          state: !lambda 'return x;'
+          state: !lambda 'return id(g_update_interval_seconds);'
 
 
 
@@ -237,7 +237,7 @@ number:
       - lambda: 'id(g_critical_threshold) = x;'
       - number.template.publish:
           id: critical_threshold
-          state: !lambda 'return x;'
+          state: !lambda 'return id(g_critical_threshold);'
       - component.update: salt_status_text
 
 
@@ -258,7 +258,7 @@ number:
       - lambda: 'id(g_full_threshold) = x;'
       - number.template.publish:
           id: full_threshold
-          state: !lambda 'return x;'
+          state: !lambda 'return id(g_full_threshold);'
       - component.update: salt_status_text
 
 
@@ -279,7 +279,7 @@ number:
       - lambda: 'id(g_good_threshold) = x;'
       - number.template.publish:
           id: good_threshold
-          state: !lambda 'return x;'
+          state: !lambda 'return id(g_good_threshold);'
       - component.update: salt_status_text
 
 
@@ -300,7 +300,7 @@ number:
       - lambda: 'id(g_low_threshold) = x;'
       - number.template.publish:
           id: low_threshold
-          state: !lambda 'return x;'
+          state: !lambda 'return id(g_low_threshold);'
       - component.update: salt_status_text
 
 # Calibration mode switch
