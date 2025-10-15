@@ -115,9 +115,10 @@ Fallback AP: "Softener-Fallback" / "12345678"
 ## Integrations
 
 - **Home Assistant**: API enabled for native integration (no encryption in webinstaller, added during ESPHome adoption)
-- **Web Server**: Available on port 80 for direct browser access
 - **OTA Updates**: Enabled for wireless firmware updates (no password in webinstaller, added during ESPHome adoption)
 - **Improv BLE/Serial**: Enabled for easy WiFi configuration
+
+**Note**: Web server component is **disabled** to prevent socket exhaustion issues with Arduino framework. All configuration is done through Home Assistant UI.
 
 ## Deployment Model
 
@@ -152,49 +153,49 @@ ESPHome update notifications are ONLY for ESPHome platform updates (e.g., ESPHom
 - Manual identification by users
 - NOT for automatic update detection
 
-## CRITICAL: GitHub Package Import Syntax
+## CRITICAL: Package Import Strategy to Avoid Caching Issues
 
-**CORRECT SYNTAX FOR IMPORTING PACKAGES FROM GITHUB:**
+**VERSION 1.2.17+ USES !include TO AVOID ESPHOME PACKAGE CACHING PROBLEMS**
 
-The web installer files (`water-softener-webinstall-simple.yaml` and `water-softener-webinstall-multi.yaml`) use the correct shorthand syntax:
+### Why This Matters
+
+ESPHome aggressively caches remote packages imported with `github://` syntax. This causes users to get stale firmware even after updates are published to GitHub. The cache is stored in ESPHome Dashboard's container and cannot be easily cleared by users.
+
+### The Solution (Modeled After Apollo MSR-2)
+
+Web installer files use `!include` for local file imports:
 
 ```yaml
+# water-softener-webinstall-simple.yaml
+packages:
+  water_softener: !include water-softener-package.yaml  # Local file, no remote caching
+```
+
+### How It Works
+
+1. User flashes device via web installer
+2. ESPHome Dashboard discovers device via `dashboard_import`
+3. Dashboard fetches **both** webinstall-simple.yaml **and** water-softener-package.yaml from the same GitHub directory
+4. Files are treated as local includes - no separate package cache
+5. Updates work immediately when user clicks "Install" in Dashboard
+
+### DO NOT Use These Approaches (They Cause Caching Issues)
+
+```yaml
+# WRONG - Creates persistent cache that ignores updates
 packages:
   water_softener: github://rmaher001/water-softener-monitor/src/water-softener-package.yaml@master
 ```
 
-**After ESPHome Dashboard adoption, users MUST keep this same syntax in their adopted YAML.**
-
-**WRONG SYNTAX (DO NOT USE):**
 ```yaml
-# WRONG - !include is for LOCAL files, NOT remote packages
-packages:
-  water_softener: !include
-    url: https://github.com/...
-    ref: master
-    file: src/water-softener-package.yaml
-    refresh: 0s
-```
-
-**Alternative valid syntax (if refresh control is needed):**
-```yaml
+# WRONG - Mapping syntax also caches indefinitely without refresh parameter
 packages:
   water_softener:
     url: https://github.com/rmaher001/water-softener-monitor
     files: [src/water-softener-package.yaml]
     ref: master
-    refresh: 0s
 ```
 
-**Common Issue:**
-When users report "device not getting latest code" or "getting old version after update":
-1. Check their adopted device YAML in ESPHome Dashboard
-2. Verify the `packages:` section uses correct syntax (shorthand or mapping, NO `!include`)
-3. If using mapping syntax without `refresh`, packages are cached indefinitely
-4. The shorthand `github://...@master` always pulls from the specified branch
+### Adopted Device Configuration
 
-**Package Caching:**
-- ESPHome caches downloaded packages locally
-- Default behavior: cache is reused unless `refresh` parameter is set
-- Shorthand syntax caches but updates are available by re-compiling
-- To force refresh: use mapping syntax with `refresh: 0s` or delete ESPHome's package cache
+After adoption, ESPHome Dashboard will keep the `!include` syntax in the adopted YAML. The package file is re-fetched from GitHub each time the user clicks "Install".

@@ -4,7 +4,7 @@
 
 substitutions:
   name: "water-softener-monitor"
-  version: "1.2.16"
+  version: "1.2.17"
 
 # Override esphome section with MAC suffix for unique device names
 esphome:
@@ -23,12 +23,12 @@ dashboard_import:
 
 # Include the main package for all sensor/config logic
 packages:
-  water_softener: github://rmaher001/water-softener-monitor/src/water-softener-package.yaml@master
+  water_softener: !include water-softener-package.yaml
 
 # API for Home Assistant integration
 api:
 
-# OTA updates - no password like Apollo MSR-2
+# OTA updates - no password for easy management
 ota:
   - platform: esphome
 
