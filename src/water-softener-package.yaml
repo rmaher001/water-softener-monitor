@@ -49,8 +49,20 @@ logger:
 
 # API and OTA are configured in individual device files
 
-# Web server temporarily removed (Arduino framework bug in ESPHome 2025.9.3)
-# Users can configure via Home Assistant UI instead
+# Web server for direct browser access (fixed in ESPHome 2025.10.0)
+web_server:
+  version: 3
+  port: 80
+  sorting_groups:
+    - id: measurement_settings
+      name: "Measurement Settings"
+      sorting_weight: 10
+    - id: alert_thresholds
+      name: "Alert Thresholds"
+      sorting_weight: 20
+    - id: system
+      name: "System"
+      sorting_weight: 30
 
 # I2C for the ToF sensor (ATOM S3 Lite Grove port)
 i2c:
