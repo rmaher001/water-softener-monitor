@@ -114,21 +114,20 @@ globals:
     initial_value: '"Checking..."'
 
   # Settings globals - these persist across reboots
+  # Measurement settings - no initial values (device-specific)
   - id: g_tank_height_cm
     type: float
     restore_value: yes
-    initial_value: '100'
 
   - id: g_full_level_cm
     type: float
     restore_value: yes
-    initial_value: '20'
 
   - id: g_update_interval_seconds
     type: float
     restore_value: yes
-    initial_value: '20'
 
+  # Threshold settings - keep initial values (useful defaults)
   - id: g_critical_threshold
     type: float
     restore_value: yes
