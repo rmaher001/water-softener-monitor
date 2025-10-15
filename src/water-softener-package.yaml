@@ -43,10 +43,15 @@ light:
 
 # Enable logging
 logger:
+  level: DEBUG
   baud_rate: 115200
   deassert_rts_dtr: true  # Required for ESP32-S3 USB CDC compatibility
   logs:
-    esp32.preferences: VERBOSE  # Debug preferences sync
+    component: DEBUG
+    esp32.preferences: VERBOSE
+    preferences: VERBOSE
+    number: DEBUG
+    template.number: DEBUG
 
 # API and OTA are configured in individual device files
 
