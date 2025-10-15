@@ -318,23 +318,11 @@ switch:
 # Buttons
 button:
   - platform: template
-    name: "Reset to Defaults"
+    name: "Reset Thresholds to Defaults"
     icon: "mdi:restore"
     web_server:
-      sorting_group_id: measurement_settings
+      sorting_group_id: alert_thresholds
     on_press:
-      - number.set:
-          id: tank_height_cm
-          value: 100
-      - delay: 100ms
-      - number.set:
-          id: full_level_cm
-          value: 20
-      - delay: 100ms
-      - number.set:
-          id: update_interval_seconds
-          value: 20
-      - delay: 100ms
       - number.set:
           id: full_threshold
           value: 80
