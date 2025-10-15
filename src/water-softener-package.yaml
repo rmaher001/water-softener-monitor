@@ -11,37 +11,12 @@ esp32:
   board: m5stack-atoms3
   variant: esp32s3
   framework:
-    type: esp-idf
+    type: arduino
 
 # Preferences with debounced flash writes to prevent overwhelming the system
 preferences:
   flash_write_interval: 5s
 
-esphome:
-  on_boot:
-    priority: 600
-    then:
-      - number.template.publish:
-          id: tank_height_cm
-          state: !lambda 'return id(g_tank_height_cm);'
-      - number.template.publish:
-          id: full_level_cm
-          state: !lambda 'return id(g_full_level_cm);'
-      - number.template.publish:
-          id: update_interval_seconds
-          state: !lambda 'return id(g_update_interval_seconds);'
-      - number.template.publish:
-          id: critical_threshold
-          state: !lambda 'return id(g_critical_threshold);'
-      - number.template.publish:
-          id: full_threshold
-          state: !lambda 'return id(g_full_threshold);'
-      - number.template.publish:
-          id: good_threshold
-          state: !lambda 'return id(g_good_threshold);'
-      - number.template.publish:
-          id: low_threshold
-          state: !lambda 'return id(g_low_threshold);'
 
 # WiFi configuration moved to individual config files
 # (water-softener-dev.yaml, water-softener-webinstall.yaml, water-softener.yaml)
@@ -74,20 +49,8 @@ logger:
 
 # API and OTA are configured in individual device files
 
-# Web server for direct browser access
-web_server:
-  version: 3
-  port: 80
-  sorting_groups:
-    - id: measurement_settings
-      name: "Measurement Settings"
-      sorting_weight: 10
-    - id: alert_thresholds
-      name: "Alert Thresholds"
-      sorting_weight: 20
-    - id: system
-      name: "System"
-      sorting_weight: 30
+# Web server temporarily removed (Arduino framework bug in ESPHome 2025.9.3)
+# Users can configure via Home Assistant UI instead
 
 # I2C for the ToF sensor (ATOM S3 Lite Grove port)
 i2c:
@@ -113,41 +76,6 @@ globals:
     restore_value: yes
     initial_value: '"Checking..."'
 
-  # Settings globals - these persist across reboots
-  # Measurement settings - no initial values (device-specific)
-  - id: g_tank_height_cm
-    type: float
-    restore_value: yes
-
-  - id: g_full_level_cm
-    type: float
-    restore_value: yes
-
-  - id: g_update_interval_seconds
-    type: float
-    restore_value: yes
-
-  # Threshold settings - keep initial values (useful defaults)
-  - id: g_critical_threshold
-    type: float
-    restore_value: yes
-    initial_value: '20'
-
-  - id: g_full_threshold
-    type: float
-    restore_value: yes
-    initial_value: '80'
-
-  - id: g_good_threshold
-    type: float
-    restore_value: yes
-    initial_value: '60'
-
-  - id: g_low_threshold
-    type: float
-    restore_value: yes
-    initial_value: '40'
-
 
 
 # Configurable settings
@@ -160,20 +88,18 @@ number:
     name: "Tank Height"
     id: tank_height_cm
     entity_category: "config"
+    optimistic: true
+    restore_value: true
+    initial_value: 100
     min_value: 30
     max_value: 150
     step: 1
     unit_of_measurement: "cm"
     icon: "mdi:arrow-expand-vertical"
     mode: box
-    web_server:
-      sorting_group_id: measurement_settings
-    set_action:
-      - lambda: 'id(g_tank_height_cm) = x;'
-      - number.template.publish:
-          id: tank_height_cm
-          state: !lambda 'return id(g_tank_height_cm);'
-      - component.update: salt_level_percent
+    on_value:
+      then:
+        - component.update: salt_level_percent
 
 
 
@@ -181,20 +107,18 @@ number:
     name: "Full Level Distance"
     id: full_level_cm
     entity_category: "config"
+    optimistic: true
+    restore_value: true
+    initial_value: 20
     min_value: 5
     max_value: 50
     step: 1
     unit_of_measurement: "cm"
     icon: "mdi:arrow-collapse-down"
     mode: box
-    web_server:
-      sorting_group_id: measurement_settings
-    set_action:
-      - lambda: 'id(g_full_level_cm) = x;'
-      - number.template.publish:
-          id: full_level_cm
-          state: !lambda 'return id(g_full_level_cm);'
-      - component.update: salt_level_percent
+    on_value:
+      then:
+        - component.update: salt_level_percent
 
 
 
@@ -202,19 +126,15 @@ number:
     name: "Update Interval"
     id: update_interval_seconds
     entity_category: "config"
+    optimistic: true
+    restore_value: true
+    initial_value: 20
     min_value: 1
     max_value: 86400
     step: 1
     unit_of_measurement: "s"
     icon: "mdi:timer"
     mode: box
-    web_server:
-      sorting_group_id: measurement_settings
-    set_action:
-      - lambda: 'id(g_update_interval_seconds) = x;'
-      - number.template.publish:
-          id: update_interval_seconds
-          state: !lambda 'return id(g_update_interval_seconds);'
 
 
 
@@ -224,20 +144,18 @@ number:
     name: "Critical Alert Threshold"
     id: critical_threshold
     entity_category: "config"
+    optimistic: true
+    restore_value: true
+    initial_value: 20
     min_value: 0
     max_value: 100
     step: 5
     unit_of_measurement: "%"
     icon: "mdi:alert-octagon"
     mode: slider
-    web_server:
-      sorting_group_id: alert_thresholds
-    set_action:
-      - lambda: 'id(g_critical_threshold) = x;'
-      - number.template.publish:
-          id: critical_threshold
-          state: !lambda 'return id(g_critical_threshold);'
-      - component.update: salt_status_text
+    on_value:
+      then:
+        - component.update: salt_status_text
 
 
 
@@ -245,20 +163,18 @@ number:
     name: "Full Threshold"
     id: full_threshold
     entity_category: "config"
+    optimistic: true
+    restore_value: true
+    initial_value: 80
     min_value: 0
     max_value: 100
     step: 5
     unit_of_measurement: "%"
     icon: "mdi:check-circle"
     mode: slider
-    web_server:
-      sorting_group_id: alert_thresholds
-    set_action:
-      - lambda: 'id(g_full_threshold) = x;'
-      - number.template.publish:
-          id: full_threshold
-          state: !lambda 'return id(g_full_threshold);'
-      - component.update: salt_status_text
+    on_value:
+      then:
+        - component.update: salt_status_text
 
 
 
@@ -266,20 +182,18 @@ number:
     name: "Good Threshold"
     id: good_threshold
     entity_category: "config"
+    optimistic: true
+    restore_value: true
+    initial_value: 60
     min_value: 0
     max_value: 100
     step: 5
     unit_of_measurement: "%"
     icon: "mdi:check"
     mode: slider
-    web_server:
-      sorting_group_id: alert_thresholds
-    set_action:
-      - lambda: 'id(g_good_threshold) = x;'
-      - number.template.publish:
-          id: good_threshold
-          state: !lambda 'return id(g_good_threshold);'
-      - component.update: salt_status_text
+    on_value:
+      then:
+        - component.update: salt_status_text
 
 
 
@@ -287,20 +201,18 @@ number:
     name: "Low Alert Threshold"
     id: low_threshold
     entity_category: "config"
+    optimistic: true
+    restore_value: true
+    initial_value: 40
     min_value: 0
     max_value: 100
     step: 5
     unit_of_measurement: "%"
     icon: "mdi:alert"
     mode: slider
-    web_server:
-      sorting_group_id: alert_thresholds
-    set_action:
-      - lambda: 'id(g_low_threshold) = x;'
-      - number.template.publish:
-          id: low_threshold
-          state: !lambda 'return id(g_low_threshold);'
-      - component.update: salt_status_text
+    on_value:
+      then:
+        - component.update: salt_status_text
 
 # Calibration mode switch
 switch:
@@ -309,8 +221,6 @@ switch:
     id: calibration_mode
     icon: "mdi:ruler"
     optimistic: true
-    web_server:
-      sorting_group_id: system
     on_turn_on:
       - delay: 300s  # 5 minutes
       - switch.turn_off: calibration_mode
@@ -320,8 +230,6 @@ button:
   - platform: template
     name: "Reset Thresholds to Defaults"
     icon: "mdi:restore"
-    web_server:
-      sorting_group_id: alert_thresholds
     on_press:
       - number.set:
           id: full_threshold
@@ -342,8 +250,6 @@ button:
   - platform: restart
     name: "Restart"
     icon: "mdi:restart"
-    web_server:
-      sorting_group_id: system
 
 # VL53L0X Distance Sensor
 sensor:
@@ -416,8 +322,6 @@ sensor:
     name: "WiFi Signal"
     update_interval: 60s
     icon: "mdi:wifi"
-    web_server:
-      sorting_group_id: system
 
 # Binary sensors
 binary_sensor:
@@ -437,8 +341,6 @@ binary_sensor:
     name: "Sensor Out of Range"
     id: sensor_out_of_range
     icon: "mdi:alert-circle"
-    web_server:
-      sorting_group_id: system
     lambda: |-
       // VL53L0X sensor hardware limits
       const float SENSOR_MIN_RANGE = 3.0;   // cm
