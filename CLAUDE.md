@@ -156,40 +156,58 @@ ESPHome update notifications are ONLY for ESPHome platform updates (e.g., ESPHom
 
 ## CRITICAL: Package Import Strategy to Avoid Caching Issues
 
-**VERSION 1.2.17+ USES !include TO AVOID ESPHOME PACKAGE CACHING PROBLEMS**
+**VERSION 1.2.18+ USES !include AND @main TO AVOID ESPHOME PACKAGE CACHING PROBLEMS**
 
 ### Why This Matters
 
-ESPHome aggressively caches remote packages imported with `github://` syntax. This causes users to get stale firmware even after updates are published to GitHub. The cache is stored in ESPHome Dashboard's container and cannot be easily cleared by users.
+ESPHome caches GitHub package imports using `@master` branch references. The `@master` cache becomes stale and doesn't refresh when updates are pushed. However, `@main` references are handled differently and fetch fresh content reliably.
 
-### The Solution (Modeled After Apollo MSR-2)
+### The Solution
 
-Web installer files use `!include` for local file imports:
-
+**1. Use `@main` in dashboard_import (not `@master`):**
 ```yaml
 # water-softener-webinstall-simple.yaml
-packages:
-  water_softener: !include water-softener-core.yaml  # Local file, no remote caching
+dashboard_import:
+  package_import_url: github://rmaher001/water-softener-monitor/src/water-softener-webinstall-simple.yaml@main
 ```
+
+**2. Use `!include` for the core package:**
+```yaml
+packages:
+  water_softener: !include water-softener-core.yaml
+```
+
+### Why This Works
+
+- `@main` references don't get cached the same way `@master` does in ESPHome
+- Even if the repo's default branch is `master`, using `@main` in URLs works and bypasses cache
+- `!include` ensures the core package file is fetched alongside the webinstall file (no separate cache layer)
+- When ESPHome Dashboard adopts a device, the adopted config gets `@main`, which continues to work for updates
 
 ### How It Works
 
 1. User flashes device via web installer
-2. ESPHome Dashboard discovers device via `dashboard_import`
-3. Dashboard fetches **both** webinstall-simple.yaml **and** water-softener-core.yaml from the same GitHub directory
-4. Files are treated as local includes - no separate package cache
-5. Updates work immediately when user clicks "Install" in Dashboard
+2. ESPHome Dashboard discovers device via `dashboard_import` with `@main`
+3. Dashboard fetches webinstall-simple.yaml and water-softener-core.yaml from GitHub
+4. Adopted config inherits `@main` reference which doesn't cache
+5. Updates work when user clicks "Install" - ESPHome fetches fresh from GitHub
 
 ### DO NOT Use These Approaches (They Cause Caching Issues)
 
 ```yaml
-# WRONG - Creates persistent cache that ignores updates
+# WRONG - @master gets cached and becomes stale
+dashboard_import:
+  package_import_url: github://rmaher001/water-softener-monitor/src/water-softener-webinstall-simple.yaml@master
+```
+
+```yaml
+# WRONG - Direct package import with @master also caches
 packages:
   water_softener: github://rmaher001/water-softener-monitor/src/water-softener-core.yaml@master
 ```
 
 ```yaml
-# WRONG - Mapping syntax also caches indefinitely without refresh parameter
+# WRONG - Mapping syntax with ref: master caches indefinitely
 packages:
   water_softener:
     url: https://github.com/rmaher001/water-softener-monitor
@@ -199,4 +217,10 @@ packages:
 
 ### Adopted Device Configuration
 
-After adoption, ESPHome Dashboard will keep the `!include` syntax in the adopted YAML. The package file is re-fetched from GitHub each time the user clicks "Install".
+After adoption, ESPHome Dashboard creates a config like:
+```yaml
+packages:
+  rmaher001.water-softener-monitor: github://rmaher001/water-softener-monitor/src/water-softener-webinstall-simple.yaml@main
+```
+
+The `@main` reference ensures ESPHome fetches fresh content from GitHub on each compile, avoiding the caching issues that affect `@master`.
