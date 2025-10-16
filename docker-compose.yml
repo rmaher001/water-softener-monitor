@@ -1,0 +1,10 @@
+version: '3'
+services:
+  esphome:
+    container_name: esphome-test
+    image: ghcr.io/esphome/esphome:2025.10.0
+    volumes:
+      - ./test-config:/config
+    ports:
+      - "6052:6052"
+    restart: unless-stopped

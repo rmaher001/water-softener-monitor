@@ -24,3 +24,7 @@ env/
 # OS
 .DS_Store
 Thumbs.db
+
+# Testing and development
+test-config/
+.playwright-mcp/
