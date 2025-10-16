@@ -1,42 +1,57 @@
 # Development Workflow
 
-This document describes the Git-based development workflow for the ESPHome Water Softener Monitor project.
-
-## Repository Structure
-
-```
-src/
-  ├── water-softener-package.yaml  # Main package - edit this for all changes
-  ├── water-softener-dev.yaml      # Dev unit config (uses !include for local testing)
-  └── water-softener.yaml          # Prod unit config (uses @master from GitHub)
-water-softener.yaml                # User template (uses @master from GitHub)
-```
+Git-based development workflow for ESPHome Water Softener Monitor with dual hardware support.
 
 ## Hardware Setup
 
-- **Dev Unit**: Current hardware at `192.168.86.62`
-  - Device name: `water-softener-dev`
-  - Config: `src/water-softener-dev.yaml`
-  - Uses local `!include` for instant testing
+### ATOM S3 (Development)
+- IP: `192.168.86.104`
+- Config: `src/water-softener-s3-dev.yaml`
+- Framework: Arduino
+- Features: No web server (socket exhaustion)
 
-- **Prod Unit**: Future/second hardware
-  - Device name: `water-softener-prod`
-  - Config: `src/water-softener.yaml`
-  - Uses `@master` from GitHub (same as all users)
+### ATOM Lite (Development)
+- IP: `192.168.86.32`
+- Config: `src/water-softener-lite-dev.yaml`
+- Framework: ESP-IDF
+- Features: Web server enabled at http://water-softener-monitor.local
+
+## Project Architecture
+
+```
+src/
+  ├── water-softener-s3-core.yaml          # ATOM S3 core package
+  ├── water-softener-lite-core.yaml        # ATOM Lite core package
+  ├── water-softener-s3-webinstall.yaml    # ATOM S3 web installer
+  ├── water-softener-lite-webinstall.yaml  # ATOM Lite web installer
+  ├── water-softener-s3-dev.yaml           # ATOM S3 dev config
+  └── water-softener-lite-dev.yaml         # ATOM Lite dev config
+
+docs/
+  ├── firmware-s3.factory.bin              # ATOM S3 web installer firmware
+  ├── firmware-lite.factory.bin            # ATOM Lite web installer firmware
+  ├── manifest-s3.json                     # ATOM S3 manifest
+  └── manifest-lite.json                   # ATOM Lite manifest
+```
+
+**Key Principle**: All feature changes go in the core packages (`*-core.yaml`). Other configs are entry points that reference these cores.
 
 ## Development Workflow
 
 ### 1. Local Development (Fast Iteration)
 
 ```bash
-# Start feature/fix branch
+# Create feature branch
 git checkout -b feature/my-feature
 
-# Edit the main package file
-# vim src/water-softener-package.yaml
+# Edit core package for your hardware
+vim src/water-softener-s3-core.yaml    # or water-softener-lite-core.yaml
 
-# Test on dev unit via command line (uses !include - instant)
-~/esphome/venv/bin/esphome run src/water-softener-dev.yaml --device 192.168.86.62
+# Test on dev hardware (uses !include - instant)
+~/esphome/venv/bin/esphome run src/water-softener-s3-dev.yaml --device 192.168.86.104
+
+# Or for ATOM Lite:
+~/esphome/venv/bin/esphome run src/water-softener-lite-dev.yaml --device 192.168.86.32
 
 # Iterate: edit, flash, test, repeat
 ```
@@ -44,16 +59,15 @@ git checkout -b feature/my-feature
 ### 2. Testing from GitHub Branch (Optional)
 
 ```bash
-# Commit and push your branch
-git add src/water-softener-package.yaml
+# Commit and push feature branch
+git add src/
 git commit -m "Description of changes"
 git push -u origin feature/my-feature
 
-# Update HA ESPHome dashboard config to test from GitHub:
-# packages:
-#   water_softener: github://rmaher001/water-softener-monitor/src/water-softener-package.yaml@feature/my-feature
+# Update dashboard_import in webinstall config to test from branch:
+# github://rmaher001/water-softener-monitor/src/water-softener-s3-webinstall.yaml@feature/my-feature
 
-# Flash from HA dashboard to verify GitHub package works correctly
+# Flash from HA ESPHome dashboard to verify GitHub package works
 ```
 
 ### 3. Release to Production
@@ -62,13 +76,31 @@ git push -u origin feature/my-feature
 # Merge to master
 git checkout master
 git merge feature/my-feature
+
+# Update version tags in webinstall configs
+vim src/water-softener-s3-webinstall.yaml    # Update @main to @1.3.1
+vim src/water-softener-lite-webinstall.yaml  # Update @main to @1.3.1
+
+# Compile web installer firmware
+~/esphome/venv/bin/esphome compile src/water-softener-s3-webinstall.yaml
+~/esphome/venv/bin/esphome compile src/water-softener-lite-webinstall.yaml
+
+# Copy firmware to docs directory
+cp src/.esphome/build/water-softener-monitor/.pioenvs/water-softener-monitor/firmware.factory.bin docs/firmware-s3.factory.bin
+cp src/.esphome/build/water-softener-monitor/.pioenvs/water-softener-monitor/firmware.factory.bin docs/firmware-lite.factory.bin
+
+# Update manifest versions
+vim docs/manifest-s3.json    # Update version field
+vim docs/manifest-lite.json  # Update version field
+
+# Create git tag
+git tag -a 1.3.1 -m "Release v1.3.1: description"
+git push origin 1.3.1
+
+# Push all changes
+git add -A
+git commit -m "Release v1.3.1: description"
 git push
-
-# Revert HA dashboard config back to @master (if you changed it):
-# packages:
-#   water_softener: github://rmaher001/water-softener-monitor/src/water-softener-package.yaml@master
-
-# All users (and your prod unit) automatically get the update via Home Assistant ESPHome dashboard
 ```
 
 ### 4. Cleanup
@@ -79,283 +111,175 @@ git branch -d feature/my-feature
 git push origin --delete feature/my-feature
 ```
 
-## File Configurations
-
-### Local Dev Config (`src/water-softener-dev.yaml`)
-
-```yaml
-substitutions:
-  device_name: "water-softener-dev"
-  friendly_name: "Water Softener Dev"
-  wifi_ssid: !secret wifi_ssid
-  wifi_password: !secret wifi_password
-
-packages:
-  water_softener: !include water-softener-package.yaml  # Local include for fast testing
-```
-
-### HA ESPHome Dashboard Config
-
-```yaml
-substitutions:
-  device_name: "water-softener-dev"
-  friendly_name: "Water Softener Dev"
-  wifi_ssid: !secret wifi_ssid
-  wifi_password: !secret wifi_password
-
-packages:
-  water_softener: github://rmaher001/water-softener-monitor/src/water-softener-package.yaml@master
-  # Change to @feature/branch-name when testing branches
-```
-
 ## Common Commands
 
-### Flash via Command Line (Development)
+### ATOM S3 Development
 ```bash
 # Compile only
-~/esphome/venv/bin/esphome compile src/water-softener-dev.yaml
+~/esphome/venv/bin/esphome compile src/water-softener-s3-dev.yaml
 
-# Flash via OTA
-~/esphome/venv/bin/esphome upload src/water-softener-dev.yaml --device 192.168.86.62
+# Upload via OTA
+~/esphome/venv/bin/esphome upload src/water-softener-s3-dev.yaml --device 192.168.86.104
 
 # Compile + Upload + Logs
-~/esphome/venv/bin/esphome run src/water-softener-dev.yaml --device 192.168.86.62
+~/esphome/venv/bin/esphome run src/water-softener-s3-dev.yaml --device 192.168.86.104
 
-# View logs only
-~/esphome/venv/bin/esphome logs src/water-softener-dev.yaml --device 192.168.86.62
+# View logs
+~/esphome/venv/bin/esphome logs src/water-softener-s3-dev.yaml --device 192.168.86.104
 ```
 
-### Git Operations
+### ATOM Lite Development
 ```bash
-# Create feature branch
-git checkout -b feature/description
+# Compile only
+~/esphome/venv/bin/esphome compile src/water-softener-lite-dev.yaml
 
-# Create fix branch
-git checkout -b fix/issue-description
+# Upload via OTA
+~/esphome/venv/bin/esphome upload src/water-softener-lite-dev.yaml --device 192.168.86.32
 
-# View current branch
-git branch
+# Compile + Upload + Logs
+~/esphome/venv/bin/esphome run src/water-softener-lite-dev.yaml --device 192.168.86.32
 
-# Switch branches
-git checkout master
-git checkout feature/my-feature
+# View logs
+~/esphome/venv/bin/esphome logs src/water-softener-lite-dev.yaml --device 192.168.86.32
+```
 
-# Merge and push
-git checkout master
-git merge feature/my-feature
+### Web Installer Build
+```bash
+# Compile both firmware variants
+~/esphome/venv/bin/esphome compile src/water-softener-s3-webinstall.yaml
+~/esphome/venv/bin/esphome compile src/water-softener-lite-webinstall.yaml
+
+# Copy to docs directory
+cp src/.esphome/build/water-softener-monitor/.pioenvs/water-softener-monitor/firmware.factory.bin docs/firmware-s3.factory.bin
+cp src/.esphome/build/water-softener-monitor/.pioenvs/water-softener-monitor/firmware.factory.bin docs/firmware-lite.factory.bin
+```
+
+## Web Installer
+
+### Building Firmware
+
+Use ESPHome's pre-built `firmware.factory.bin` (includes bootloader, partition table, boot_app0, firmware):
+
+```bash
+# Compile web installer configs
+~/esphome/venv/bin/esphome compile src/water-softener-s3-webinstall.yaml
+~/esphome/venv/bin/esphome compile src/water-softener-lite-webinstall.yaml
+
+# Copy factory binaries to docs directory
+cp src/.esphome/build/water-softener-monitor/.pioenvs/water-softener-monitor/firmware.factory.bin docs/firmware-s3.factory.bin
+cp src/.esphome/build/water-softener-monitor/.pioenvs/water-softener-monitor/firmware.factory.bin docs/firmware-lite.factory.bin
+
+# Update manifest versions
+vim docs/manifest-s3.json    # Increment version
+vim docs/manifest-lite.json  # Increment version
+
+# Commit and push
+git add docs/
+git commit -m "Update web installer firmware to v1.3.1"
 git push
 ```
 
-## Key Principles
-
-1. **All changes go in `src/water-softener-package.yaml`** - This is the single source of truth
-2. **Use feature/fix branches** - Never commit directly to master during development
-3. **Test locally first** - Use `!include` for instant feedback
-4. **Verify from GitHub** - Optionally test branch before merging to ensure package works remotely
-5. **You're a user too** - Your prod unit gets updates the same way as all users (from `@master`)
-
-## Home Assistant Integration
-
-### Entity IDs
-After flashing with clean discovery, entities are named:
-- `sensor.water_softener_dev_salt_level`
-- `sensor.water_softener_dev_distance_to_salt`
-- `sensor.water_softener_dev_salt_status`
-- `binary_sensor.water_softener_dev_sensor_out_of_range`
-- `binary_sensor.water_softener_dev_calibration_active`
-- `switch.water_softener_dev_calibration_mode`
-- `button.water_softener_dev_reset_to_defaults`
-
-### Deleting Device from HA
-If you need to delete the device from Home Assistant for a clean start:
-1. Go to **Settings** → **Devices & Services** → **ESPHome** (integration card, not device)
-2. Find device in the ESPHome integration view
-3. Click **three dots** → **Delete**
-4. Reflash to rediscover with clean entity IDs
-
-## Troubleshooting
-
-### Device shows offline in ESPHome dashboard
-- The ESPHome add-on dashboard and Home Assistant device discovery are separate
-- Device may show in HA but not in ESPHome dashboard - this is normal if you haven't added the config to the dashboard
-- Add it manually via "Empty Configuration" if needed
-
-### Entity IDs don't match device name
-- Delete device from Home Assistant completely
-- Reflash to get fresh discovery with correct entity IDs
-- Delete option is in ESPHome integration view, not individual device view
-
-### Changes not appearing
-- If using `!include`: Changes are instant (just recompile)
-- If using GitHub reference: Changes only appear after pushing to that branch
-- Clear `.esphome` cache if needed: `rm -rf src/.esphome`
-
-## Web Installer: Building Firmware for ESP Web Tools
-
-The web installer at https://rmaher001.github.io/water-softener-monitor/ uses ESP Web Tools to flash firmware directly from the browser.
-
-### Building the Firmware
-
-**IMPORTANT**: Use ESPHome's pre-built `firmware.factory.bin` instead of manually merging binaries.
-
-```bash
-# Compile the webinstall firmware (not dev firmware)
-~/esphome/venv/bin/esphome compile src/water-softener-webinstall.yaml
-
-# Copy the factory binary to docs directory
-cp src/.esphome/build/water-softener/.pioenvs/water-softener/firmware.factory.bin docs/
-
-# Update manifest.json version number
-# Edit docs/manifest.json and increment version
-
-# Commit and push to GitHub
-git add docs/firmware.factory.bin docs/manifest.json
-git commit -m "Update web installer firmware to vX.X.X"
-git push
-```
-
-### User Workflow for Clean Entity IDs
-
-The web installer firmware includes `dashboard_import` which enables the official ESPHome adoption workflow for clean entity IDs:
-
-**Step 1: Flash Firmware**
-- User visits web installer and flashes firmware
-- Configures WiFi via Improv Serial prompt
-- Device boots with generic name (e.g., "water-softener-952d58")
-
-**Step 2: Adopt in ESPHome Dashboard (Required for Clean Entity IDs)**
-- Device appears in ESPHome Dashboard as "Discovered" device
-- User clicks "ADOPT" button
-- User enters custom friendly name (e.g., "Garage Water Softener")
-- ESPHome creates custom YAML with:
-  - Device name with MAC suffix for unique hostname
-  - User's chosen friendly name
-  - `name_add_mac_suffix: false` (MAC already in name)
-
-**Step 3: Add to Home Assistant**
-- After adoption, device auto-discovers in Home Assistant
-- Entity IDs use the friendly name → `sensor.garage_water_softener_salt_level` ✓
-- Clean, user-customized entity IDs without MAC suffix!
-
-**Important**: Users must adopt via ESPHome Dashboard BEFORE adding to Home Assistant. If they skip this step and add directly to HA, entity IDs will include the MAC suffix from the factory firmware.
-
-### Why This Workflow?
-
-This is the official ESPHome pattern used by:
-- ESPHome Bluetooth Proxies
-- Apollo Automation devices
-- All officially-supported web-installed ESPHome devices
-
-The `dashboard_import` configuration enables this workflow automatically.
-
-### Why firmware.factory.bin?
-
-ESPHome generates a `firmware.factory.bin` that includes:
-- Bootloader (with correct flash mode for ESP32-S3)
-- Partition table
-- boot_app0
-- Application firmware
-
-This is the "modern format" binary specifically built for web flashing. Do NOT use:
-- ❌ Manual `esptool merge-bin` commands
-- ❌ Individual bootloader.bin + partitions.bin + firmware.bin parts
-- ❌ The regular firmware.bin alone
-
-The factory binary has the correct flash parameters pre-configured by ESPHome's build system.
-
-### manifest.json Format
+### Manifest Format
 
 ```json
 {
-  "name": "Water Softener Salt Monitor",
-  "version": "1.5.0",
+  "name": "Water Softener Monitor (ATOM S3)",
+  "version": "1.3.0",
   "home_assistant_domain": "esphome",
   "new_install_prompt_erase": true,
+  "new_install_improv_wait_time": 0,
   "builds": [
     {
       "chipFamily": "ESP32-S3",
+      "improv": true,
       "parts": [
-        {
-          "path": "firmware.factory.bin",
-          "offset": 0
-        }
+        { "path": "firmware-s3.factory.bin", "offset": 0 }
       ]
     }
   ]
 }
 ```
 
-### Troubleshooting Web Installer
+### User Workflow
 
-If the web installer crashes Chrome during flashing:
-1. Verify you're using `firmware.factory.bin` (not merged or individual parts)
-2. Check that `logger` has `deassert_rts_dtr: true` for ESP32-S3 USB CDC compatibility
-3. Increment version number in manifest.json to avoid cached firmware
-4. Wait for GitHub Pages to rebuild (2-3 minutes after push)
+1. **Flash Firmware**: User visits web installer, flashes firmware for their hardware
+2. **Configure WiFi**: BLE Improv via Home Assistant app (no button press required)
+3. **Add to Home Assistant**: Device auto-discovers via ESPHome integration
+4. **Configure**: Adjust tank settings in Home Assistant device page
 
-## Recovery: Unbricking M5Stack ATOM S3
+## Version Strategy
 
-If the ATOM S3 gets bricked (USB connect/disconnect bootloop, won't flash), follow this recovery procedure:
+Web installer configs use version tags for reproducible builds:
 
-### Symptoms of Bricked Device
-- USB connects and disconnects repeatedly (~1 second cycle)
-- Cannot flash new firmware
+```yaml
+dashboard_import:
+  package_import_url: github://rmaher001/water-softener-monitor/src/water-softener-s3-webinstall.yaml@1.3.0
+  import_full_config: false
+
+packages:
+  water_softener: !include water-softener-s3-core.yaml
+```
+
+**Why version tags?**
+- Immutable - `@1.3.0` always points to same git commit
+- Reproducible - users get tested configurations
+- No caching ambiguity - ESPHome knows exactly what to fetch
+
+**Update workflow:**
+- ESPHome platform updates: Automatic via Home Assistant ESPHome dashboard
+- Project updates: Manual via web installer re-flash
+
+## Troubleshooting
+
+### Device offline in ESPHome dashboard
+- ESPHome add-on dashboard and HA device discovery are separate
+- Device may show in HA but not ESPHome dashboard - normal if not added to dashboard
+- Add manually via "Empty Configuration" if needed
+
+### Changes not appearing
+- If using `!include`: Changes are instant (just recompile)
+- If using GitHub reference: Changes appear after pushing to that branch
+- Clear cache: `rm -rf src/.esphome`
+
+### Web installer crashes Chrome
+1. Verify using `firmware.factory.bin` (not manual merge)
+2. Check `logger` has `deassert_rts_dtr: true` for ESP32-S3
+3. Increment manifest version to avoid cache
+4. Wait 2-3 minutes for GitHub Pages rebuild
+
+## Recovery: Unbricking ATOM S3
+
+### Symptoms
+- USB connects/disconnects repeatedly (~1 second cycle)
+- Cannot flash firmware
 - No LED activity
-- Device not recognized by computer
 
 ### Recovery Procedure
 
-**Step 1: Enter Download Mode**
+**Enter Download Mode:**
+1. Unplug USB cable
+2. Press and hold RST button (side button)
+3. While holding RST, plug in USB cable
+4. Keep holding RST for 5-8 seconds (label says 2s, but needs longer)
+5. Release RST button
+6. Device should stay connected
 
-The key is holding the RST button long enough:
-
-1. **Unplug** the USB cable from ATOM S3
-2. **Press and hold the RST button** (side button)
-3. **While holding RST**, plug in the USB cable
-4. **Keep holding RST for 5-8 seconds** after plugging in (not just 2 seconds as labeled)
-5. **Release** the RST button
-6. The device should now stay connected without cycling
-
-**Note:** The label says "Hold 2s → G0=0" but in practice you need to hold it longer (5-8 seconds) for reliable entry into download mode.
-
-**Step 2: Erase Corrupted Firmware**
-
-With the device in download mode and connected:
-
+**Erase Corrupted Firmware:**
 ```bash
-# Check device is connected
+# Check device connection
 ls /dev/tty.* | grep usb
 
-# Erase the corrupted flash
+# Erase flash
 ~/esphome/venv/bin/python -m esptool --chip esp32s3 --port /dev/tty.usbmodem* erase_flash
 ```
 
-You should see:
-```
-Flash memory erased successfully in 2.1 seconds.
-```
-
-**Step 3: Flash Good Firmware**
-
+**Flash Good Firmware:**
 ```bash
-# Flash the working dev firmware
-~/esphome/venv/bin/esphome run src/water-softener-dev.yaml --device /dev/tty.usbmodem*
+~/esphome/venv/bin/esphome run src/water-softener-s3-dev.yaml --device /dev/tty.usbmodem*
 ```
-
-The device should flash successfully and boot normally. I2C errors about the VL53L0X sensor are normal if the sensor isn't connected.
 
 ### Prevention
-
-- **Do NOT use web-based ESP flashers** - they can cause hard bricks on ATOM S3
-- **Always use ESPHome CLI** or Home Assistant ESPHome dashboard for flashing
-- **Test on dev hardware first** before flashing production units
-- **Keep USB cable connected** throughout the entire flash process
-
-### If Recovery Fails
-
-If the RST button hold method doesn't work:
-
-1. Try different USB cables (must be data-capable, not charge-only)
-2. Try different USB ports or a powered USB hub
-3. Try holding **both buttons** (RST + top button) while plugging in
-4. As a last resort, physical GPIO0 to GND shorting may be required (advanced)
+- Do NOT use web-based ESP flashers (can cause hard bricks)
+- Always use ESPHome CLI or HA ESPHome dashboard
+- Test on dev hardware first
+- Keep USB connected throughout flash process
