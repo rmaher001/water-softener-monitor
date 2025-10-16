@@ -2,6 +2,16 @@
 
 ESPHome-based salt level monitor for water softener brine tanks using a VL53L0X ToF distance sensor.
 
+## 🚀 Quick Install
+
+**Flash firmware directly from your browser - no software installation required:**
+
+### **👉 [Open Web Installer](https://rmaher001.github.io/water-softener-monitor/)**
+
+Compatible with M5Stack ATOM Lite and ATOM S3 Lite hardware.
+
+---
+
 ## Hardware
 
 **Controller (choose one):**
