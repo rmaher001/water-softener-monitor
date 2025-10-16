@@ -3,7 +3,7 @@
 # Includes web server for standalone configuration (ESP-IDF framework)
 
 substitutions:
-  name: "water-softener"
+  name: "water-softener-monitor"
   version: "1.4.0-lite"
 
 esphome:

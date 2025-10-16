@@ -3,7 +3,7 @@
 # No web server (Arduino framework socket limitations)
 
 substitutions:
-  name: "water-softener"
+  name: "water-softener-monitor"
   version: "1.4.0-s3"
 
 esphome:
