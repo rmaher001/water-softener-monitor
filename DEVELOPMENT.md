@@ -14,7 +14,7 @@ Git-based development workflow for ESPHome Water Softener Monitor with dual hard
 - IP: `192.168.86.32`
 - Config: `src/water-softener-lite-dev.yaml`
 - Framework: ESP-IDF
-- Features: Web server enabled at http://water-softener-monitor.local
+- Features: Web server enabled at http://water-softener-monitor-lite-dev.local
 
 ## Project Architecture
 
@@ -38,7 +38,9 @@ docs/
 
 ## Development Workflow
 
-### 1. Local Development (Fast Iteration)
+### 1. Local Development (Testing Integration/Adoption)
+
+**Dev configs use GitHub refs** to test the full adoption workflow that users experience:
 
 ```bash
 # Create feature branch
@@ -47,14 +49,24 @@ git checkout -b feature/my-feature
 # Edit core package for your hardware
 vim src/water-softener-s3-core.yaml    # or water-softener-lite-core.yaml
 
-# Test on dev hardware (uses !include - instant)
+# Commit and push to test from GitHub
+git add src/
+git commit -m "Description of changes"
+git push -u origin feature/my-feature
+
+# Test adoption workflow from GitHub
 ~/esphome/venv/bin/esphome run src/water-softener-s3-dev.yaml --device 192.168.86.104
 
 # Or for ATOM Lite:
 ~/esphome/venv/bin/esphome run src/water-softener-lite-dev.yaml --device 192.168.86.32
 
-# Iterate: edit, flash, test, repeat
+# Test ESPHome Dashboard adoption and Home Assistant updates
 ```
+
+**For fast sensor logic iteration**, temporarily use local files:
+- Edit dev config to use `!include` instead of GitHub ref
+- Test changes instantly without git operations
+- Revert to GitHub ref before committing
 
 ### 2. Testing from GitHub Branch (Optional)
 
@@ -86,8 +98,8 @@ vim src/water-softener-lite-webinstall.yaml  # Update @main to @1.3.1
 ~/esphome/venv/bin/esphome compile src/water-softener-lite-webinstall.yaml
 
 # Copy firmware to docs directory
-cp src/.esphome/build/water-softener-monitor/.pioenvs/water-softener-monitor/firmware.factory.bin docs/firmware-s3.factory.bin
-cp src/.esphome/build/water-softener-monitor/.pioenvs/water-softener-monitor/firmware.factory.bin docs/firmware-lite.factory.bin
+cp src/.esphome/build/water-softener-monitor-s3/.pioenvs/water-softener-monitor-s3/firmware.factory.bin docs/firmware-s3.factory.bin
+cp src/.esphome/build/water-softener-monitor-lite/.pioenvs/water-softener-monitor-lite/firmware.factory.bin docs/firmware-lite.factory.bin
 
 # Update manifest versions
 vim docs/manifest-s3.json    # Update version field
@@ -150,8 +162,8 @@ git push origin --delete feature/my-feature
 ~/esphome/venv/bin/esphome compile src/water-softener-lite-webinstall.yaml
 
 # Copy to docs directory
-cp src/.esphome/build/water-softener-monitor/.pioenvs/water-softener-monitor/firmware.factory.bin docs/firmware-s3.factory.bin
-cp src/.esphome/build/water-softener-monitor/.pioenvs/water-softener-monitor/firmware.factory.bin docs/firmware-lite.factory.bin
+cp src/.esphome/build/water-softener-monitor-s3/.pioenvs/water-softener-monitor-s3/firmware.factory.bin docs/firmware-s3.factory.bin
+cp src/.esphome/build/water-softener-monitor-lite/.pioenvs/water-softener-monitor-lite/firmware.factory.bin docs/firmware-lite.factory.bin
 ```
 
 ## Web Installer
@@ -166,8 +178,8 @@ Use ESPHome's pre-built `firmware.factory.bin` (includes bootloader, partition t
 ~/esphome/venv/bin/esphome compile src/water-softener-lite-webinstall.yaml
 
 # Copy factory binaries to docs directory
-cp src/.esphome/build/water-softener-monitor/.pioenvs/water-softener-monitor/firmware.factory.bin docs/firmware-s3.factory.bin
-cp src/.esphome/build/water-softener-monitor/.pioenvs/water-softener-monitor/firmware.factory.bin docs/firmware-lite.factory.bin
+cp src/.esphome/build/water-softener-monitor-s3/.pioenvs/water-softener-monitor-s3/firmware.factory.bin docs/firmware-s3.factory.bin
+cp src/.esphome/build/water-softener-monitor-lite/.pioenvs/water-softener-monitor-lite/firmware.factory.bin docs/firmware-lite.factory.bin
 
 # Update manifest versions
 vim docs/manifest-s3.json    # Increment version

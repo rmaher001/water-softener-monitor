@@ -91,7 +91,7 @@ All parameters adjustable in Home Assistant (no reflashing needed):
 - **Update Interval**: How often to poll the sensor (1-300 seconds)
 - **Thresholds**: Full, Good, Low, Critical alert levels (percentages)
 
-**Note**: ATOM Lite also includes a web interface at http://water-softener-monitor.local for standalone configuration.
+**Note**: ATOM Lite also includes a web interface at http://water-softener-monitor-lite.local for standalone configuration.
 
 ## Status Levels
 
@@ -103,7 +103,7 @@ All parameters adjustable in Home Assistant (no reflashing needed):
 ## Integration
 
 - **Home Assistant**: Auto-discovery with ESPHome integration (no API key required after adoption)
-- **Web Interface**: Available on ATOM Lite only (http://water-softener-monitor.local)
+- **Web Interface**: Available on ATOM Lite only (http://water-softener-monitor-lite.local)
 - **OTA Updates**: Supported through ESPHome Dashboard (no password required after adoption)
 - **Bluetooth**: Improv BLE for easy WiFi configuration
 

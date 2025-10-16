@@ -6,7 +6,7 @@ ESPHome-based water softener salt level monitoring system using M5Stack ATOM har
 
 ### ATOM Lite (ESP32-PICO-D4)
 - ESP-IDF framework
-- Web server enabled (http://water-softener-monitor.local)
+- Web server enabled (http://water-softener-monitor-lite.local or -lite-dev.local for dev)
 - I2C: SDA=GPIO26, SCL=GPIO32
 - Button: GPIO39 (no internal pullup)
 
@@ -29,6 +29,12 @@ ESPHome-based water softener salt level monitoring system using M5Stack ATOM har
 **Development:**
 - `src/water-softener-lite-dev.yaml` - ATOM Lite (192.168.86.32)
 - `src/water-softener-s3-dev.yaml` - ATOM S3 (192.168.86.104)
+
+**Dev Config Strategy (v1.4.0+):**
+- Dev configs use GitHub package refs (not `!include`) to mirror production workflow
+- Enables testing ESPHome Dashboard adoption and Home Assistant update mechanisms
+- Device names include hardware suffix to avoid mDNS conflicts during testing
+- For fast iteration on sensor logic, temporarily switch to `!include` in dev configs
 
 ## Core Logic
 
