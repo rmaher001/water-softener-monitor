@@ -74,15 +74,15 @@
   <h1>🧂 Water Softener Salt Monitor - Web Installer</h1>
 
   <p>
-    ESPHome-based salt level monitor for water softener brine tanks using M5Stack ATOM S3 and VL53L0X ToF sensor.
+    ESPHome-based salt level monitor for water softener brine tanks using M5Stack ATOM hardware and VL53L0X ToF sensor.
   </p>
 
   <div class="requirements">
     <strong>⚠️ Requirements:</strong>
     <ul style="text-align: left; margin: 10px 0;">
       <li>Chrome or Edge browser (Web Serial required)</li>
-      <li>USB-C cable to connect ATOM S3 to computer</li>
-      <li>M5Stack ATOM S3 Lite with ToF sensor</li>
+      <li>USB-C cable to connect device to computer</li>
+      <li>M5Stack ATOM S3 Lite or ATOM Lite with VL53L0X ToF sensor</li>
     </ul>
   </div>
 
@@ -91,61 +91,64 @@
   <div class="step">
     <span class="step-number">1</span>
     <strong>Connect Device</strong><br>
-    Connect your M5Stack ATOM S3 to your computer via USB-C cable
+    Connect your M5Stack ATOM device to your computer via USB-C cable
   </div>
 
   <div class="step">
     <span class="step-number">2</span>
     <strong>Flash Firmware</strong><br>
-    Click the button below and select your device's serial port
+    Choose your hardware and click the button to install
   </div>
 
   <div class="install-section">
-    <esp-web-install-button manifest="./manifest-simple.json">
+    <h3 style="margin-top: 0;">M5Stack ATOM S3 Lite</h3>
+    <p style="font-size: 14px; color: #666;">ESP32-S3 • Arduino framework • No web server</p>
+    <esp-web-install-button manifest="./manifest-s3.json">
       <button slot="activate" style="padding: 15px 30px; font-size: 18px; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer;">
-        Install Firmware
+        Install for ATOM S3
       </button>
     </esp-web-install-button>
-    <p style="margin-top: 15px;">
-      <strong>✅ Clean entity IDs</strong> - Example: <code>sensor.water_softener_monitor_salt_level</code>
+  </div>
+
+  <div class="install-section">
+    <h3 style="margin-top: 0;">M5Stack ATOM Lite</h3>
+    <p style="font-size: 14px; color: #666;">ESP32-PICO-D4 • ESP-IDF framework • Built-in web server</p>
+    <esp-web-install-button manifest="./manifest-lite.json">
+      <button slot="activate" style="padding: 15px 30px; font-size: 18px; background: #2ecc71; color: white; border: none; border-radius: 5px; cursor: pointer;">
+        Install for ATOM Lite
+      </button>
+    </esp-web-install-button>
+    <p style="margin-top: 15px; font-size: 14px; color: #27ae60;">
+      <strong>✨ Recommended</strong> - Includes standalone web server for configuration
     </p>
+  </div>
+
+  <div style="background: #e8f5e9; border: 1px solid #81c784; padding: 15px; border-radius: 5px; margin: 20px auto;">
+    <strong>💡 Which hardware should I use?</strong><br>
+    <ul style="text-align: left; margin: 10px 0;">
+      <li><strong>ATOM Lite</strong> - Best choice for most users. Includes web server for easy standalone configuration, cheaper than S3</li>
+      <li><strong>ATOM S3</strong> - Works great but requires Home Assistant for configuration (no web server due to Arduino framework limitations)</li>
+    </ul>
   </div>
 
   <div style="background: #ff6b6b; color: white; padding: 10px; border-radius: 5px; margin: 20px auto;">
     <strong>⚠️ Known Issue (Mac):</strong> Chrome may crash when installation reaches 100%. This is normal - the firmware is successfully installed. Simply unplug and replug the device after the crash.
   </div>
 
-  <!-- Collapsible Advanced Section -->
-  <details style="margin: 20px auto; padding: 15px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px;">
-    <summary style="cursor: pointer; font-weight: bold; color: #495057;">
-      ▶ Advanced: Multiple Device Installation
-    </summary>
-    <div style="margin-top: 15px;">
-      <p><strong>Only needed if you have multiple water softeners</strong></p>
-      <p>This version adds a unique MAC suffix to entity IDs to prevent conflicts between multiple devices.</p>
-      <ul style="margin: 10px 0;">
-        <li>Entity IDs will include MAC suffix</li>
-        <li>Example: <code>sensor.water_softener_monitor_954910_salt_level</code></li>
-        <li>Can be renamed later in ESPHome Dashboard</li>
-      </ul>
-      <esp-web-install-button manifest="./manifest-multi.json">
-        <button slot="activate" style="padding: 12px 24px; font-size: 14px; background: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer;">
-          Install Multi-Device Version
-        </button>
-      </esp-web-install-button>
-    </div>
-  </details>
-
   <div class="step">
     <span class="step-number">3</span>
     <strong>Configure WiFi</strong><br>
     Use Home Assistant app (iOS/Android):
     <ul style="text-align: left; margin: 10px 0;">
-      <li>Press button on ATOM S3 to enable Bluetooth pairing</li>
+      <li>Press button on device to enable Bluetooth pairing (BLE Improv)</li>
       <li>Open HA app → Settings → Devices → Add Device</li>
       <li>Select "ESPHome" and follow prompts to enter WiFi credentials</li>
     </ul>
-    <em>Alternative: Connect to "Water Softener Hotspot" WiFi if device creates one</em>
+    <em>Alternative methods:</em>
+    <ul style="text-align: left; margin: 5px 0;">
+      <li>ATOM Lite: Access web server at device IP address (http://water-softener-monitor.local)</li>
+      <li>Both: Connect to "Water Softener Hotspot" WiFi fallback if needed</li>
+    </ul>
   </div>
 
   <div class="step">
@@ -157,7 +160,11 @@
   <div class="step">
     <span class="step-number">5</span>
     <strong>Configure Settings</strong><br>
-    Configure tank height, thresholds, and update interval through Home Assistant. Go to the device page and adjust the settings in the Configuration section.
+    Configure tank height, thresholds, and update interval:
+    <ul style="text-align: left; margin: 10px 0;">
+      <li><strong>Home Assistant:</strong> Go to device page and adjust settings in Configuration section</li>
+      <li><strong>ATOM Lite web server:</strong> Access http://water-softener-monitor.local in your browser</li>
+    </ul>
   </div>
 
   <h2>Next Steps</h2>

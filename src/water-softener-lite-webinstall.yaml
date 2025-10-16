@@ -1,0 +1,39 @@
+# Water Softener Monitor - ATOM Lite Web Installer Config
+# For M5Stack ATOM Lite hardware (ESP32-PICO-D4)
+# Includes web server for standalone configuration (ESP-IDF framework)
+
+substitutions:
+  name: "water-softener-monitor"
+  version: "1.3.0-lite"
+
+esphome:
+  name: "${name}"
+  friendly_name: Water Softener Monitor
+  comment: Water Softener Monitor (ATOM Lite)
+  name_add_mac_suffix: false
+  project:
+    name: "rmaher001.water-softener-monitor"
+    version: "${version}"
+
+# Dashboard import for ESPHome Dashboard integration and updates
+dashboard_import:
+  package_import_url: github://rmaher001/water-softener-monitor/src/water-softener-lite-webinstall.yaml@main
+  import_full_config: false
+
+# Include the Lite core package for all sensor/config logic
+packages:
+  water_softener: !include water-softener-lite-core.yaml
+
+# API for Home Assistant integration
+api:
+
+# OTA updates - no password for easy management
+ota:
+  - platform: esphome
+
+wifi:
+  power_save_mode: none
+  ap:
+    ssid: "Water Softener Hotspot"
+    password: "configme123"
+    ap_timeout: 0s

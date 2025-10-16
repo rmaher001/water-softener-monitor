@@ -1,29 +1,28 @@
-# Water Softener Monitor - Simple Web Installer Config
-# For users with a SINGLE device - no MAC suffix, clean entity IDs
-# This is the recommended install for most users
+# Water Softener Monitor - ATOM S3 Web Installer Config
+# For M5Stack ATOM S3 Lite hardware
+# No web server (Arduino framework socket limitations)
 
 substitutions:
   name: "water-softener-monitor"
-  version: "1.2.20"
+  version: "1.3.0-s3"
 
-# Simple setup - NO MAC suffix for clean entity IDs
 esphome:
   name: "${name}"
   friendly_name: Water Softener Monitor
-  comment: Water Softener Monitor
-  name_add_mac_suffix: false  # NO suffix - clean entity IDs!
+  comment: Water Softener Monitor (ATOM S3)
+  name_add_mac_suffix: false
   project:
     name: "rmaher001.water-softener-monitor"
     version: "${version}"
 
 # Dashboard import for ESPHome Dashboard integration and updates
 dashboard_import:
-  package_import_url: github://rmaher001/water-softener-monitor/src/water-softener-webinstall-simple.yaml@main
+  package_import_url: github://rmaher001/water-softener-monitor/src/water-softener-s3-webinstall.yaml@main
   import_full_config: false
 
-# Include the main package for all sensor/config logic
+# Include the S3 core package for all sensor/config logic
 packages:
-  water_softener: !include water-softener-core.yaml
+  water_softener: !include water-softener-s3-core.yaml
 
 # API for Home Assistant integration
 api:

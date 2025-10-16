@@ -4,24 +4,52 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is an ESPHome-based water softener salt level monitoring system running on an M5Stack ATOM S3 Lite with a VL53L0X Time-of-Flight distance sensor. The device measures the distance to the salt level in a water softener tank and calculates percentage full, with configurable thresholds for different alert levels.
+This is an ESPHome-based water softener salt level monitoring system running on M5Stack ATOM hardware (S3 or Lite) with a VL53L0X Time-of-Flight distance sensor. The device measures the distance to the salt level in a water softener tank and calculates percentage full, with configurable thresholds for different alert levels.
 
 ## Hardware Configuration
 
-- **Board**: M5Stack ATOM S3 (ESP32-S3)
+**VERSION 1.3.0+ supports two hardware variants:**
+
+### ATOM S3 Lite (ESP32-S3)
+- **Board**: M5Stack ATOM S3 Lite
+- **Chip**: ESP32-S3
+- **Framework**: Arduino (ESP-IDF has persistence issues on S3)
 - **Sensor**: VL53L0X ToF distance sensor via I2C (Grove port)
   - SDA: GPIO2
   - SCL: GPIO1
-- **Framework**: Arduino
+- **Web Server**: Disabled (Arduino framework socket exhaustion)
+- **Configuration**: Via Home Assistant only
+
+### ATOM Lite (ESP32-PICO-D4) - RECOMMENDED
+- **Board**: M5Stack ATOM Lite
+- **Chip**: ESP32-PICO-D4
+- **Framework**: ESP-IDF (works perfectly with persistence and web server)
+- **Sensor**: VL53L0X ToF distance sensor via I2C (Grove port)
+  - SDA: GPIO26
+  - SCL: GPIO32
+- **Button**: GPIO39 (no internal pullup)
+- **Web Server**: Enabled (http://water-softener-monitor.local)
+- **Configuration**: Via Home Assistant OR web server
+- **Advantages**: Cheaper than S3, standalone web configuration, same WiFi performance
 
 ## Key Architecture
 
 ### Configuration Files
 
-- `src/water-softener-core.yaml` - Core functionality with all sensors and logic
-- `src/water-softener-webinstall-simple.yaml` - Web installer configuration for single devices (no encryption, uses Improv BLE)
-- `src/water-softener-webinstall-multi.yaml` - Web installer configuration for multiple devices (adds MAC suffix)
-- `src/water-softener-dev.yaml` - Development configuration for local testing
+**Core Packages (hardware-specific):**
+- `src/water-softener-s3-core.yaml` - ATOM S3 core functionality (Arduino framework)
+- `src/water-softener-lite-core.yaml` - ATOM Lite core functionality (ESP-IDF framework, web server enabled)
+
+**Web Installer Configs:**
+- `src/water-softener-s3-webinstall.yaml` - ATOM S3 web installer (no encryption, uses Improv BLE)
+- `src/water-softener-lite-webinstall.yaml` - ATOM Lite web installer (no encryption, uses Improv BLE)
+
+**Development/Testing:**
+- `src/water-softener-dev.yaml` - Development configuration for local testing (ATOM S3)
+- `src/water-softener-atom-lite.yaml` - Development configuration for ATOM Lite testing
+
+**Archived (see archive/README.md):**
+- Multi-device configurations removed in v1.3.0 (simplified for single-device use case)
 
 ### Core Logic Flow
 
@@ -96,6 +124,19 @@ The project uses four lambda functions:
 - Security enforced via ESPHome Dashboard adoption (adds encryption/passwords)
 - Tested and verified: BLE Improv works, Dashboard adoption successful
 
+**Known Issue - Stuck Discovery Notifications After Device Deletion**:
+
+If you delete a device from Home Assistant and then try to re-add it via BLE Improv, the discovery notification in the Home Assistant web interface may become stuck and won't dismiss. Clicking "Add" shows a manual IP address entry dialog instead of the BLE Improv WiFi configuration flow. This is a Home Assistant caching issue, not a firmware problem.
+
+**Workaround - Use Mobile App**:
+1. Use the **Home Assistant mobile app** (iOS/Android) instead of the web interface
+2. In the mobile app: **Settings → Devices & Services → Add Integration → ESPHome**
+3. The app will detect the device via Bluetooth and show BLE Improv setup
+4. Enter WiFi credentials when prompted (no button press required thanks to `authorizer: none`)
+5. Complete the WiFi setup through the mobile app interface
+
+**Alternative**: Restart Home Assistant (Settings → System → Restart) to clear the stuck notification cache, then try adding the device again via the web interface.
+
 ## Common Commands
 
 **ESPHome CLI Path**: `~/esphome/venv/bin/esphome` (or create an alias for faster access)
@@ -123,14 +164,15 @@ The project uses four lambda functions:
 
 ### For Web Installer Build
 ```bash
-# Compile Simple Web Installer (single device, clean entity IDs)
-~/esphome/venv/bin/esphome compile src/water-softener-webinstall-simple.yaml
+# Compile ATOM S3 Web Installer
+~/esphome/venv/bin/esphome compile src/water-softener-s3-webinstall.yaml
 
-# Compile Multi-Device Web Installer (multiple devices with MAC suffix)
-~/esphome/venv/bin/esphome compile src/water-softener-webinstall-multi.yaml
+# Compile ATOM Lite Web Installer
+~/esphome/venv/bin/esphome compile src/water-softener-lite-webinstall.yaml
 
 # Copy firmware to docs directory for web installer release
-# (see DEVELOPMENT.md "Web Installer: Building Firmware for ESP Web Tools" section)
+cp src/.esphome/build/water-softener-monitor/.pioenvs/water-softener-monitor/firmware.factory.bin docs/firmware-s3.factory.bin   # for S3
+cp src/.esphome/build/water-softener-monitor/.pioenvs/water-softener-monitor/firmware.factory.bin docs/firmware-lite.factory.bin # for Lite
 ```
 
 ## WiFi Configuration
@@ -149,7 +191,9 @@ Fallback AP: "Softener-Fallback" / "12345678"
 - **OTA Updates**: Enabled for wireless firmware updates (no password in webinstaller, added during ESPHome adoption)
 - **Improv BLE/Serial**: Enabled for easy WiFi configuration
 
-**Note**: Web server component is **disabled** to prevent socket exhaustion issues with Arduino framework. All configuration is done through Home Assistant UI.
+**Web Server:**
+- **ATOM S3**: Web server **disabled** to prevent socket exhaustion issues with Arduino framework. Configuration via Home Assistant only.
+- **ATOM Lite**: Web server **enabled** (ESP-IDF framework supports it without issues). Configuration via Home Assistant OR web interface at http://water-softener-monitor.local
 
 ## Deployment Model
 
@@ -173,7 +217,7 @@ For comprehensive development guidance, see **DEVELOPMENT.md**, which covers:
 - **Recovery**: Procedures for unbricking devices or fixing flashing issues
 - **Git Operations**: Branching, merging, and cleanup workflow
 
-**Key Principle**: All feature changes go in `src/water-softener-core.yaml` (the single source of truth). Other config files are just entry points that reference this core package.
+**Key Principle**: Feature changes go in the core config files (`src/water-softener-s3-core.yaml` or `src/water-softener-lite-core.yaml`). Changes that apply to both hardware variants should be duplicated in both files. Web installer configs are just entry points that reference these core packages.
 
 ## CRITICAL: Firmware Update Notifications
 
@@ -196,73 +240,78 @@ ESPHome update notifications are ONLY for ESPHome platform updates (e.g., ESPHom
 - Manual identification by users
 - NOT for automatic update detection
 
-## CRITICAL: Package Import Strategy to Avoid Caching Issues
+## Package Import Strategy and Updates
 
-**VERSION 1.2.18+ USES !include AND @main TO AVOID ESPHOME PACKAGE CACHING PROBLEMS**
+**VERSION 1.2.20+ USES VERSION TAGS FOR REPRODUCIBLE BUILDS**
 
-### Why This Matters
+### Configuration Approach
 
-ESPHome caches GitHub package imports using `@master` branch references. The `@master` cache becomes stale and doesn't refresh when updates are pushed. However, `@main` references are handled differently and fetch fresh content reliably.
+The web installer configs use **version tags** in `dashboard_import`:
 
-### The Solution
-
-**1. Use `@main` in dashboard_import (not `@master`):**
 ```yaml
-# water-softener-webinstall-simple.yaml
+# water-softener-s3-webinstall.yaml (example)
 dashboard_import:
-  package_import_url: github://rmaher001/water-softener-monitor/src/water-softener-webinstall-simple.yaml@main
-```
+  package_import_url: github://rmaher001/water-softener-monitor/src/water-softener-s3-webinstall.yaml@1.3.0
+  import_full_config: false
 
-**2. Use `!include` for the core package:**
-```yaml
 packages:
-  water_softener: !include water-softener-core.yaml
+  water_softener: !include water-softener-s3-core.yaml
 ```
 
-### Why This Works
+**Why version tags?**
+- Immutable - `@1.2.20` always points to the same git commit
+- Reproducible - users get tested, known-good configurations
+- No caching ambiguity - ESPHome knows exactly what to fetch
+- Testable - we can verify the exact config users will get during adoption
 
-- `@main` references don't get cached the same way `@master` does in ESPHome
-- Even if the repo's default branch is `master`, using `@main` in URLs works and bypasses cache
-- `!include` ensures the core package file is fetched alongside the webinstall file (no separate cache layer)
-- When ESPHome Dashboard adopts a device, the adopted config gets `@main`, which continues to work for updates
+**Why `!include` for packages?**
+- Ensures core package is fetched alongside webinstall file
+- Avoids separate cache layer for the core package
+- Simplifies dependency chain
 
-### How It Works
+### How Updates Work
 
-1. User flashes device via web installer
-2. ESPHome Dashboard discovers device via `dashboard_import` with `@main`
-3. Dashboard fetches webinstall-simple.yaml and water-softener-core.yaml from GitHub
-4. Adopted config inherits `@main` reference which doesn't cache
-5. Updates work when user clicks "Install" - ESPHome fetches fresh from GitHub
+**ESPHome Platform Updates (automatic):**
+- Home Assistant notifies users 2-3x/month about new ESPHome platform releases
+- Users update ESPHome add-on in HA
+- Users click "Update" on devices in HA or "Update All" in ESPHome Dashboard
+- Devices get recompiled with new ESPHome platform version
+- **Uses locally cached project config** - no project feature updates
 
-### DO NOT Use These Approaches (They Cause Caching Issues)
+**Project Updates (manual via web installer):**
+- Project updates (v1.2.20 → v1.2.21) are NOT automatically notified
+- Users must visit https://rmaher001.github.io/water-softener-monitor/
+- Re-flash device via web installer to get new firmware
+- Reconfigure WiFi via BLE Improv if needed
+- Device now runs new project version
 
-```yaml
-# WRONG - @master gets cached and becomes stale
-dashboard_import:
-  package_import_url: github://rmaher001/water-softener-monitor/src/water-softener-webinstall-simple.yaml@master
-```
+**This is the standard model used by Apollo Automation and other commercial ESPHome projects.**
 
-```yaml
-# WRONG - Direct package import with @master also caches
-packages:
-  water_softener: github://rmaher001/water-softener-monitor/src/water-softener-core.yaml@master
-```
+### Release Workflow
 
-```yaml
-# WRONG - Mapping syntax with ref: master caches indefinitely
-packages:
-  water_softener:
-    url: https://github.com/rmaher001/water-softener-monitor
-    files: [src/water-softener-core.yaml]
-    ref: master
-```
+When releasing a new version (e.g., v1.3.1):
 
-### Adopted Device Configuration
+1. Update version in `src/water-softener-s3-webinstall.yaml` and `src/water-softener-lite-webinstall.yaml`
+   - ATOM S3: `version: "1.3.1-s3"`
+   - ATOM Lite: `version: "1.3.1-lite"`
+2. Commit changes to repository
+3. Create git tag: `git tag -a 1.3.1 -m "Release v1.3.1: <description>"`
+4. Push tag: `git push origin 1.3.1`
+5. Update `dashboard_import` URL to reference new tag: `@1.3.1`
+6. Compile web installer firmware binaries for both hardware variants
+7. Copy firmware to docs/ directory:
+   - `docs/firmware-s3.factory.bin`
+   - `docs/firmware-lite.factory.bin`
+8. Update manifest files with new version:
+   - `docs/manifest-s3.json`
+   - `docs/manifest-lite.json`
+9. Commit and push to GitHub
+10. Test adoption in ESPHome Dashboard with new tag reference
 
-After adoption, ESPHome Dashboard creates a config like:
-```yaml
-packages:
-  rmaher001.water-softener-monitor: github://rmaher001/water-softener-monitor/src/water-softener-webinstall-simple.yaml@main
-```
+### Why Users Don't Get Project Update Notifications
 
-The `@main` reference ensures ESPHome fetches fresh content from GitHub on each compile, avoiding the caching issues that affect `@master`.
+ESPHome has a device registry at esphome.io for per-device update notifications, but:
+- Most projects (including Apollo Automation) don't use it
+- Requires maintaining registry entries and infrastructure
+- Web installer re-flashing works well for major updates
+- Users expect to update via web installer for firmware changes
