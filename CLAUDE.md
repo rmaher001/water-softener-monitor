@@ -97,3 +97,28 @@ esphome logs src/water-softener-s3-dev.yaml --device 192.168.86.104
 - Version tags in `dashboard_import` ensure reproducible builds
 - Web installer is standard deployment path (not ESPHome Dashboard)
 - See DEVELOPMENT.md for detailed workflow documentation
+
+## ESPHome Update Notifications
+
+**Observed Behavior (ESPHome 2025.10.x):**
+
+Home Assistant's update list for ESPHome devices has limitations that can cause devices to not appear:
+
+**Key Findings:**
+- Update list shows only **online/discoverable** devices that need updates
+- Offline or undiscoverable devices are excluded (even if they need updates)
+- No fixed limit on number of devices - varies based on connectivity
+- Observed: 8 devices initially → 10 devices after powering on 2 monitors
+
+**Related Issue:**
+- GitHub issue #6775: Reports 26 devices in ESPHome but only 7 shown in HA update list
+- Suggests network/discovery issues rather than hard limits
+
+**Recommended Update Workflow:**
+1. **ESPHome Dashboard "Update All"** - Most reliable, updates all devices in dashboard
+2. **Home Assistant update list** - Only shows reachable devices needing updates
+
+**For Users:**
+- Devices must be online/reachable to appear in HA update notifications
+- ESPHome Dashboard adoption recommended for consistent update visibility
+- Offline devices won't show update prompts even if they need platform updates
