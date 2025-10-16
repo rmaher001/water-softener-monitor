@@ -1,16 +1,8 @@
 # Water Softener Salt Monitor
 
-ESPHome-based salt level monitor for water softener brine tanks using a VL53L0X ToF distance sensor.
+Monitor your water softener salt level from Home Assistant. A distance sensor measures the salt level in your brine tank and reports the percentage full. Use Home Assistant automations to send notifications when salt is low, so you never run out.
 
-## 🚀 Quick Install
-
-**Flash firmware directly from your browser - no software installation required:**
-
-### **👉 [Open Web Installer](https://rmaher001.github.io/water-softener-monitor/)**
-
-Compatible with M5Stack ATOM Lite and ATOM S3 Lite hardware.
-
----
+**[Web Installer](https://rmaher001.github.io/water-softener-monitor/)** | Uses M5Stack ATOM Lite or S3 hardware with VL53L0X ToF sensor
 
 ## Hardware
 
