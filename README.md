@@ -57,6 +57,8 @@ For advanced management and customization:
 2. **Customize Configuration** - Edit YAML to add custom features
 3. **OTA Updates** - Deploy changes wirelessly after adoption
 
+**Note**: It appears that some of the devices may not receive update notifications in Home Assistant if they are not adopted in ESPHome Dashboard.
+
 ---
 
 ### Manual Installation (Advanced Users)
