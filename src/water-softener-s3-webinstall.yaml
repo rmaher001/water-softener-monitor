@@ -10,7 +10,7 @@ esphome:
   name: "${name}"
   friendly_name: Water Softener Monitor
   comment: Water Softener Monitor (ATOM S3)
-  name_add_mac_suffix: false
+  name_add_mac_suffix: true
   project:
     name: "rmaher001.water-softener-monitor"
     version: "${version}"
