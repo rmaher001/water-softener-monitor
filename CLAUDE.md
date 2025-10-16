@@ -45,8 +45,8 @@ This is an ESPHome-based water softener salt level monitoring system running on 
 - `src/water-softener-lite-webinstall.yaml` - ATOM Lite web installer (no encryption, uses Improv BLE)
 
 **Development/Testing:**
-- `src/water-softener-dev.yaml` - Development configuration for local testing (ATOM S3)
-- `src/water-softener-atom-lite.yaml` - Development configuration for ATOM Lite testing
+- `src/water-softener-s3-dev.yaml` - ATOM S3 development configuration for local testing
+- `src/water-softener-lite-dev.yaml` - ATOM Lite development configuration for local testing
 
 **Archived (see archive/README.md):**
 - Multi-device configurations removed in v1.3.0 (simplified for single-device use case)
@@ -143,23 +143,23 @@ If you delete a device from Home Assistant and then try to re-add it via BLE Imp
 
 ### For Development (using dev config)
 ```bash
-# Validate Configuration
-~/esphome/venv/bin/esphome config src/water-softener-dev.yaml
+# For ATOM S3 (dev device at 192.168.86.104)
+~/esphome/venv/bin/esphome config src/water-softener-s3-dev.yaml
+~/esphome/venv/bin/esphome compile src/water-softener-s3-dev.yaml
+~/esphome/venv/bin/esphome upload src/water-softener-s3-dev.yaml --device 192.168.86.104
+~/esphome/venv/bin/esphome logs src/water-softener-s3-dev.yaml --device 192.168.86.104
+~/esphome/venv/bin/esphome run src/water-softener-s3-dev.yaml --device 192.168.86.104
 
-# Compile Firmware
-~/esphome/venv/bin/esphome compile src/water-softener-dev.yaml
-
-# Upload via OTA (to dev device at 192.168.86.104)
-~/esphome/venv/bin/esphome upload src/water-softener-dev.yaml --device 192.168.86.104
-
-# View Logs
-~/esphome/venv/bin/esphome logs src/water-softener-dev.yaml --device 192.168.86.104
-
-# Run Full Pipeline (compile + upload + logs)
-~/esphome/venv/bin/esphome run src/water-softener-dev.yaml --device 192.168.86.104
+# For ATOM Lite (dev device at 192.168.86.32)
+~/esphome/venv/bin/esphome config src/water-softener-lite-dev.yaml
+~/esphome/venv/bin/esphome compile src/water-softener-lite-dev.yaml
+~/esphome/venv/bin/esphome upload src/water-softener-lite-dev.yaml --device 192.168.86.32
+~/esphome/venv/bin/esphome logs src/water-softener-lite-dev.yaml --device 192.168.86.32
+~/esphome/venv/bin/esphome run src/water-softener-lite-dev.yaml --device 192.168.86.32
 
 # Flash via USB (if OTA fails)
-~/esphome/venv/bin/esphome run src/water-softener-dev.yaml --device /dev/tty.usbmodem*
+~/esphome/venv/bin/esphome run src/water-softener-s3-dev.yaml --device /dev/tty.usbmodem*
+~/esphome/venv/bin/esphome run src/water-softener-lite-dev.yaml --device /dev/tty.usbmodem*
 ```
 
 ### For Web Installer Build
