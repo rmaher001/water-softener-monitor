@@ -4,7 +4,7 @@
 
 substitutions:
   name: "water-softener-monitor-lite-dev"
-  version: "1.4.0-dev"
+  version: "1.4.1-dev"
 
 esphome:
   name: "${name}"
@@ -17,12 +17,12 @@ esphome:
 
 # Dashboard import for ESPHome Dashboard testing
 dashboard_import:
-  package_import_url: github://rmaher001/water-softener-monitor/src/water-softener-lite-webinstall.yaml@main
+  package_import_url: github://rmaher001/water-softener-monitor/src/water-softener-lite-webinstall.yaml@master
   import_full_config: false
 
 # Include the Lite core package from GitHub (tests package import)
 packages:
-  water_softener: github://rmaher001/water-softener-monitor/src/water-softener-lite-core.yaml@main
+  water_softener: github://rmaher001/water-softener-monitor/src/water-softener-lite-core.yaml@master
 
 # API for Home Assistant integration
 api:
