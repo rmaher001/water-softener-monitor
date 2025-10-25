@@ -56,6 +56,83 @@ Maintains last valid reading when sensor out of range (< 3cm or > 150cm):
 ### Calibration Mode
 Fast sensor polling (100ms) for setup/testing. Auto-disables after 5 minutes.
 
+## Water Softener Regeneration Cycle Behavior
+
+### Background
+Water softeners run a nightly regeneration cycle (typically 2-3 AM) that significantly affects ToF sensor readings. Understanding this behavior is critical for proper sensor configuration and filtering strategy.
+
+### Regeneration Cycle Stages
+
+**Typical timing: 02:10-03:10 AM PDT (09:10-10:10 UTC)**
+
+1. **Brine Draw Stage (~30-60 min)**
+   - Concentrated brine is **pumped OUT** of the salt tank
+   - Water level in brine tank **drops significantly** (nearly empties)
+   - Brine flows to resin tank to regenerate the softener resin
+   - ToF sensor measures **longer distances** as water level drops
+   - Salt level reading drops 15-20% (appears as false "depletion")
+
+2. **Backwash/Rinse Stages (~10-20 min)**
+   - Resin tank is flushed, brine tank remains mostly empty
+   - Sensor continues reading longer distances
+
+3. **Refill Stage (~5-15 min)**
+   - Fresh water flows back into brine tank
+   - Water level **rises back up** to prepare brine for next cycle
+   - ToF sensor measures **shorter distances** as water level rises
+   - Salt level reading "recovers" back to baseline
+
+4. **Post-Cycle Settling (~30-60 min)**
+   - Water surface stabilizes
+   - Readings gradually return to pre-cycle values
+
+### Observed Data Patterns (InfluxDB Analysis, Oct 24 2025)
+
+**5-minute sample data:**
+```
+08:00-09:05 AM UTC: Normal stable readings (~59-60%)
+09:10 AM UTC:       Sudden drop begins (59.81% → 57.37%)
+09:15 AM UTC:       Major drop (44.72%)
+09:20-10:00 AM UTC: Sustained low readings (~41-42%) - BRINE DRAW ACTIVE
+10:10 AM UTC:       Recovery begins (43% → 52%)
+10:15-11:30 AM UTC: Gradual return to baseline
+11:30+ AM UTC:      Back to normal (~57%)
+```
+
+**Impact on readings:**
+- **~28 affected samples** out of 288 daily (10% of data)
+- **15-20% apparent drop** in salt level during brine draw
+- **1-2 hour recovery period** after cycle completes
+- **Actual salt consumption:** Only 1-2% per cycle (masked by water level changes)
+
+### Physical Explanation
+
+The ToF distance sensor measures distance to the **water surface**, not the salt bed. During regeneration:
+
+- **Brine Draw**: Water level drops → sensor reads longer distance → calculates lower salt percentage
+- **Refill**: Water level rises → sensor reads shorter distance → calculates higher salt percentage
+- **Reality**: Salt dissolves slowly (~1-2% consumed), but water level changes dramatically
+
+The "recovery" in sensor readings is **not salt regenerating** - it's the brine tank refilling with fresh water for tomorrow's cycle.
+
+### Implications for Sensor Configuration
+
+**Key Constraints:**
+1. Cannot accurately measure salt consumption during regeneration cycle
+2. ~2.5 hours of unreliable data daily (02:00-04:30 AM local time)
+3. Sensor tracks **water level changes** more than **salt depletion**
+
+**Recommended Strategies:**
+1. **Longer update intervals** (5 min - 1 hour) to reduce database load
+2. **Heavy filtering** (median + exponential moving average) to smooth fluctuations
+3. **Optional blackout period** (01:30-04:30 AM) to ignore regeneration cycle data
+4. **Backwash detection** via sudden drops >10% can confirm cycle execution
+
+**Update Frequency Trade-offs:**
+- 20 seconds (current): 4,320 readings/day, excessive database load, captures surface noise
+- 5 minutes: 288 readings/day, good balance, can detect backwash cycle
+- 1 hour: 24 readings/day, minimal load, stable readings, misses regeneration details
+
 ## Configuration Parameters
 
 **Measurement:**
