@@ -273,7 +273,6 @@ sensor:
       then:
         - component.update: salt_level_percent
         - component.update: salt_status_text
-        - component.update: regen_cycle_active
 
   # Calculate salt level percentage
   - platform: template
