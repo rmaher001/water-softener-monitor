@@ -574,6 +574,12 @@ text_sensor:
       id(last_valid_status) = new_status;
       return {new_status};
 
+  - platform: template
+    name: "Firmware Version"
+    icon: "mdi:chip"
+    lambda: |-
+      return {"${version}"};
+
 # Fast update interval for calibration mode
 interval:
   - interval: 100ms

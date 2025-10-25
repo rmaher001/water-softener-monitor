@@ -274,6 +274,30 @@ automation:
 **Thresholds:**
 - Critical: 20%, Low: 40%, Good: 60%, Full: 80%
 
+## Version Management
+
+**Version String Format**: `X.Y.Z-variant` (e.g., `1.5.0-s3`, `1.5.0-lite`)
+
+**How Versioning Works:**
+1. Version defined in webinstall configs (`src/water-softener-{s3|lite}-webinstall.yaml`):
+   ```yaml
+   substitutions:
+     version: "1.5.0-s3"  # or "1.5.0-lite"
+   ```
+
+2. Version passed to core configs via `${version}` substitution
+
+3. Exposed in two places:
+   - **Home Assistant**: `text_sensor.water_softener_firmware_version`
+   - **Device Info**: Settings → Devices → Water Softener → "Project Version"
+
+**Verifying Active Version:**
+- Check `text_sensor.water_softener_firmware_version` in Home Assistant
+- Or check device info in HA: Settings → Devices → Water Softener Monitor
+- Or look for version-specific features (e.g., v1.5.0 has `binary_sensor.water_softener_regeneration_cycle_active`)
+
+**Important**: Git tags use NO "v" prefix (use `1.5.0`, NOT `v1.5.0`)
+
 ## Development Commands
 
 ```bash
