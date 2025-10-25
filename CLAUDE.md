@@ -145,10 +145,12 @@ The "recovery" in sensor readings is **not salt regenerating** - it's the brine 
 - **Safety timeout**: 4 hours maximum
 - **False alarm reset**: Auto-clear if <5% total drop after 1 hour
 
-**Exposed Attributes:**
-- `baseline_level` - Salt percentage before regeneration began
-- `drop_percentage` - Maximum drop observed during cycle
-- `minutes_active` - Duration of current/last cycle
+**Metrics Available in Home Assistant:**
+- Binary sensor state (ON/OFF) with timestamps
+- Users can compute additional metrics using Home Assistant template sensors:
+  - Baseline level: Capture `salt_level_percent` when cycle starts
+  - Drop amount: Track min/max of `salt_level_percent` during cycle
+  - Duration: Calculate from `last_changed` timestamp
 
 **Status Sensor Behavior:**
 - "Salt Status" text sensor freezes during regeneration to prevent false alerts
@@ -196,19 +198,16 @@ automation:
 automation:
   - alias: "Water Softener - Long Regeneration"
     trigger:
-      - platform: numeric_state
+      - platform: state
         entity_id: binary_sensor.water_softener_regeneration_cycle_active
-        attribute: minutes_active
-        above: 180  # 3 hours
-    condition:
-      - condition: state
-        entity_id: binary_sensor.water_softener_regeneration_cycle_active
-        state: "on"
+        to: "on"
+        for:
+          hours: 3
     action:
       - service: notify.mobile_app
         data:
           title: "Water Softener Warning"
-          message: "Regeneration cycle running abnormally long ({{ state_attr('binary_sensor.water_softener_regeneration_cycle_active', 'minutes_active') }} minutes)."
+          message: "Regeneration cycle has been running for over 3 hours."
 ```
 
 **4. Malfunction Detection (No Recovery)**
@@ -216,14 +215,12 @@ automation:
 automation:
   - alias: "Water Softener - Malfunction Detection"
     trigger:
-      - platform: numeric_state
+      - platform: state
         entity_id: binary_sensor.water_softener_regeneration_cycle_active
-        attribute: minutes_active
-        above: 120  # 2 hours into cycle
+        to: "on"
+        for:
+          hours: 2
     condition:
-      - condition: state
-        entity_id: binary_sensor.water_softener_regeneration_cycle_active
-        state: "on"
       - condition: numeric_state
         entity_id: sensor.water_softener_salt_level
         below: 45  # Still very low after 2 hours
@@ -248,7 +245,7 @@ automation:
       - service: notify.mobile_app
         data:
           title: "Water Softener"
-          message: "Regeneration cycle started. Baseline: {{ state_attr('binary_sensor.water_softener_regeneration_cycle_active', 'baseline_level') }}%"
+          message: "Regeneration cycle started."
 
   - alias: "Water Softener - Regeneration Completed"
     trigger:
@@ -259,7 +256,7 @@ automation:
       - service: notify.mobile_app
         data:
           title: "Water Softener"
-          message: "Regeneration cycle completed after {{ state_attr('binary_sensor.water_softener_regeneration_cycle_active', 'minutes_active') }} minutes."
+          message: "Regeneration cycle completed."
 ```
 
 **Note:** Adjust thresholds and timing based on your specific water softener model and usage patterns. Time-based softeners typically regenerate daily, while demand-based softeners may run every 3-7 days.

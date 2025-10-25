@@ -494,26 +494,6 @@ binary_sensor:
       }
 
       return id(regen_active);
-    attributes:
-      baseline_level:
-        lambda: |-
-          if (id(regen_active)) {
-            return esphome::optional<float>(id(regen_baseline));
-          }
-          return {};
-      drop_percentage:
-        lambda: |-
-          if (id(regen_active)) {
-            return esphome::optional<float>(id(drop_amount));
-          }
-          return {};
-      minutes_active:
-        lambda: |-
-          if (id(regen_active)) {
-            unsigned long elapsed_ms = millis() - id(regen_start_time);
-            return esphome::optional<unsigned long>(elapsed_ms / 60000);
-          }
-          return {};
 
 # Status text
 text_sensor:
