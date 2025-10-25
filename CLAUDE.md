@@ -130,10 +130,10 @@ The "recovery" in sensor readings is **not salt regenerating** - it's the brine 
 
 **Update Frequency Trade-offs:**
 - 20 seconds (v1.4.0): 4,320 readings/day, excessive database load, captures surface noise
-- 5 minutes (v1.5.0+): 288 readings/day, good balance, can detect backwash cycle
+- 5 minutes (1.5.0+): 288 readings/day, good balance, can detect backwash cycle
 - 1 hour: 24 readings/day, minimal load, stable readings, misses regeneration details
 
-## Regeneration Detection (v1.5.0+)
+## Regeneration Detection (1.5.0+)
 
 ### Binary Sensor: "Regeneration Cycle Active"
 
@@ -294,7 +294,7 @@ automation:
 **Verifying Active Version:**
 - Check `text_sensor.water_softener_firmware_version` in Home Assistant
 - Or check device info in HA: Settings → Devices → Water Softener Monitor
-- Or look for version-specific features (e.g., v1.5.0 has `binary_sensor.water_softener_regeneration_cycle_active`)
+- Or look for version-specific features (e.g., 1.5.0 has `binary_sensor.water_softener_regeneration_cycle_active`)
 
 **Important**: Git tags use NO "v" prefix (use `1.5.0`, NOT `v1.5.0`)
 
