@@ -129,16 +129,147 @@ The "recovery" in sensor readings is **not salt regenerating** - it's the brine 
 4. **Backwash detection** via sudden drops >10% can confirm cycle execution
 
 **Update Frequency Trade-offs:**
-- 20 seconds (current): 4,320 readings/day, excessive database load, captures surface noise
-- 5 minutes: 288 readings/day, good balance, can detect backwash cycle
+- 20 seconds (v1.4.0): 4,320 readings/day, excessive database load, captures surface noise
+- 5 minutes (v1.5.0+): 288 readings/day, good balance, can detect backwash cycle
 - 1 hour: 24 readings/day, minimal load, stable readings, misses regeneration details
+
+## Regeneration Detection (v1.5.0+)
+
+### Binary Sensor: "Regeneration Cycle Active"
+
+**Automatic detection of water softener regeneration cycles using salt level patterns.**
+
+**Detection Logic:**
+- **START**: >3% drop in 5 minutes OR >5% drop in 10 minutes
+- **END**: 50% recovery from drop + stability (±2% for 30 minutes)
+- **Safety timeout**: 4 hours maximum
+- **False alarm reset**: Auto-clear if <5% total drop after 1 hour
+
+**Exposed Attributes:**
+- `baseline_level` - Salt percentage before regeneration began
+- `drop_percentage` - Maximum drop observed during cycle
+- `minutes_active` - Duration of current/last cycle
+
+**Status Sensor Behavior:**
+- "Salt Status" text sensor freezes during regeneration to prevent false alerts
+- Status changes require 30-minute confirmation delay (prevents false positives during regen detection lag and refills)
+
+### Home Assistant Automation Examples
+
+**1. Simple Refill Alert**
+```yaml
+automation:
+  - alias: "Water Softener - Low Salt Alert"
+    trigger:
+      - platform: state
+        entity_id: text_sensor.water_softener_salt_status
+        to: "Low - Add Salt Soon"
+    action:
+      - service: notify.mobile_app
+        data:
+          title: "Water Softener"
+          message: "Salt level is low. Please refill soon."
+```
+
+**2. Missed Regeneration Cycle (Time-Based Softeners)**
+```yaml
+automation:
+  - alias: "Water Softener - Missed Regeneration"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.water_softener_regeneration_cycle_active
+        to: "off"
+        for:
+          hours: 36  # Adjust based on your softener schedule
+    action:
+      - service: notify.mobile_app
+        data:
+          title: "Water Softener Alert"
+          message: "No regeneration detected in 36 hours. Check softener operation."
+
+# For demand-based softeners, use longer delay:
+# hours: 168  # 7 days
+```
+
+**3. Abnormally Long Regeneration Cycle**
+```yaml
+automation:
+  - alias: "Water Softener - Long Regeneration"
+    trigger:
+      - platform: numeric_state
+        entity_id: binary_sensor.water_softener_regeneration_cycle_active
+        attribute: minutes_active
+        above: 180  # 3 hours
+    condition:
+      - condition: state
+        entity_id: binary_sensor.water_softener_regeneration_cycle_active
+        state: "on"
+    action:
+      - service: notify.mobile_app
+        data:
+          title: "Water Softener Warning"
+          message: "Regeneration cycle running abnormally long ({{ state_attr('binary_sensor.water_softener_regeneration_cycle_active', 'minutes_active') }} minutes)."
+```
+
+**4. Malfunction Detection (No Recovery)**
+```yaml
+automation:
+  - alias: "Water Softener - Malfunction Detection"
+    trigger:
+      - platform: numeric_state
+        entity_id: binary_sensor.water_softener_regeneration_cycle_active
+        attribute: minutes_active
+        above: 120  # 2 hours into cycle
+    condition:
+      - condition: state
+        entity_id: binary_sensor.water_softener_regeneration_cycle_active
+        state: "on"
+      - condition: numeric_state
+        entity_id: sensor.water_softener_salt_level
+        below: 45  # Still very low after 2 hours
+    action:
+      - service: notify.mobile_app
+        data:
+          title: "Water Softener Malfunction"
+          message: "Salt level not recovering during regeneration. Possible system malfunction."
+          data:
+            priority: high
+```
+
+**5. Regeneration Cycle Notification (Informational)**
+```yaml
+automation:
+  - alias: "Water Softener - Regeneration Started"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.water_softener_regeneration_cycle_active
+        to: "on"
+    action:
+      - service: notify.mobile_app
+        data:
+          title: "Water Softener"
+          message: "Regeneration cycle started. Baseline: {{ state_attr('binary_sensor.water_softener_regeneration_cycle_active', 'baseline_level') }}%"
+
+  - alias: "Water Softener - Regeneration Completed"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.water_softener_regeneration_cycle_active
+        to: "off"
+    action:
+      - service: notify.mobile_app
+        data:
+          title: "Water Softener"
+          message: "Regeneration cycle completed after {{ state_attr('binary_sensor.water_softener_regeneration_cycle_active', 'minutes_active') }} minutes."
+```
+
+**Note:** Adjust thresholds and timing based on your specific water softener model and usage patterns. Time-based softeners typically regenerate daily, while demand-based softeners may run every 3-7 days.
 
 ## Configuration Parameters
 
 **Measurement:**
 - Tank Height (30-150cm, default 100cm)
 - Full Level Distance (5-50cm, default 20cm)
-- Update Interval (1-86400s, default 20s)
+- Update Interval (1-86400s, default 300s / 5 minutes)
 
 **Thresholds:**
 - Critical: 20%, Low: 40%, Good: 60%, Full: 80%

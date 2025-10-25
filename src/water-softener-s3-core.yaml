@@ -71,6 +71,42 @@ globals:
     restore_value: yes
     initial_value: '"Checking..."'
 
+  # Status change delay tracking
+  - id: pending_status
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+
+  - id: pending_status_time
+    type: unsigned long
+    restore_value: no
+    initial_value: '0'
+
+  # Regeneration detection tracking
+  - id: regen_active
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+  - id: regen_baseline
+    type: float
+    restore_value: no
+    initial_value: '0.0'
+
+  - id: regen_start_time
+    type: unsigned long
+    restore_value: no
+    initial_value: '0'
+
+  - id: drop_amount
+    type: float
+    restore_value: no
+    initial_value: '0.0'
+
+  - id: recent_readings
+    type: std::vector<float>
+    restore_value: no
+
 
 
 # Configurable settings
@@ -123,7 +159,7 @@ number:
     entity_category: "config"
     optimistic: true
     restore_value: true
-    initial_value: 20
+    initial_value: 300
     min_value: 1
     max_value: 86400
     step: 1
@@ -259,13 +295,14 @@ sensor:
     filters:
       - multiply: 100  # Convert meters to cm
       - filter_out: nan
-      - sliding_window_moving_average:
-          window_size: 10
+      - median:
+          window_size: 5
           send_every: 1
     on_value:
       then:
         - component.update: salt_level_percent
         - component.update: salt_status_text
+        - component.update: regen_cycle_active
 
   # Calculate salt level percentage
   - platform: template
@@ -355,6 +392,129 @@ binary_sensor:
       }
       return false;  // Valid reading
 
+  - platform: template
+    name: "Regeneration Cycle Active"
+    id: regen_cycle_active
+    icon: "mdi:water-sync"
+    lambda: |-
+      float current_level = id(salt_level_percent).state;
+      unsigned long current_time = millis();
+
+      // Skip if invalid reading
+      if (isnan(current_level)) {
+        return id(regen_active);
+      }
+
+      // Maintain rolling window of recent readings for stability check
+      if (id(recent_readings).size() >= 6) {
+        id(recent_readings).erase(id(recent_readings).begin());
+      }
+      id(recent_readings).push_back(current_level);
+
+      // === START DETECTION ===
+      if (!id(regen_active)) {
+        // Check for sudden drop indicating regen start
+        // Method 1: >3% drop in 5 minutes (1 sample at 5-min intervals)
+        // Method 2: >5% drop in 10 minutes (2 samples)
+
+        bool start_detected = false;
+
+        if (id(recent_readings).size() >= 2) {
+          // Check 5-minute drop (current vs 1 sample ago)
+          float drop_5min = id(recent_readings)[id(recent_readings).size() - 2] - current_level;
+          if (drop_5min > 3.0) {
+            start_detected = true;
+          }
+        }
+
+        if (!start_detected && id(recent_readings).size() >= 3) {
+          // Check 10-minute drop (current vs 2 samples ago)
+          float drop_10min = id(recent_readings)[id(recent_readings).size() - 3] - current_level;
+          if (drop_10min > 5.0) {
+            start_detected = true;
+          }
+        }
+
+        if (start_detected) {
+          // Regen cycle started!
+          id(regen_active) = true;
+          id(regen_baseline) = id(recent_readings)[0];  // Use oldest reading as baseline
+          id(regen_start_time) = current_time;
+          id(drop_amount) = id(regen_baseline) - current_level;
+          ESP_LOGI("regen", "Regeneration started - baseline: %.1f%%, drop: %.1f%%",
+                   id(regen_baseline), id(drop_amount));
+        }
+      }
+
+      // === END DETECTION ===
+      if (id(regen_active)) {
+        unsigned long elapsed_seconds = (current_time - id(regen_start_time)) / 1000;
+        unsigned long elapsed_minutes = elapsed_seconds / 60;
+        float current_drop = id(regen_baseline) - current_level;
+
+        // Safety timeout: 4 hours maximum
+        if (elapsed_minutes > 240) {
+          ESP_LOGI("regen", "Regeneration ended - timeout after %lu minutes", elapsed_minutes);
+          id(regen_active) = false;
+          id(recent_readings).clear();
+          return false;
+        }
+
+        // False alarm reset: If <5% total drop after 1 hour
+        if (elapsed_minutes > 60 && id(drop_amount) < 5.0) {
+          ESP_LOGI("regen", "Regeneration ended - false alarm (only %.1f%% drop)", id(drop_amount));
+          id(regen_active) = false;
+          id(recent_readings).clear();
+          return false;
+        }
+
+        // Check for end condition: 50% recovery + stability
+        float recovery_target = id(regen_baseline) - (id(drop_amount) * 0.5);
+        bool recovered = current_level >= recovery_target;
+
+        if (recovered && id(recent_readings).size() >= 6) {
+          // Check stability: ±2% variation over last 30 minutes (6 samples)
+          float min_level = *std::min_element(id(recent_readings).begin(), id(recent_readings).end());
+          float max_level = *std::max_element(id(recent_readings).begin(), id(recent_readings).end());
+          float variation = max_level - min_level;
+
+          if (variation <= 2.0) {
+            // Regeneration complete!
+            ESP_LOGI("regen", "Regeneration ended - recovered and stable after %lu minutes", elapsed_minutes);
+            id(regen_active) = false;
+            id(recent_readings).clear();
+            return false;
+          }
+        }
+
+        // Update drop amount if current drop is larger
+        if (current_drop > id(drop_amount)) {
+          id(drop_amount) = current_drop;
+        }
+      }
+
+      return id(regen_active);
+    attributes:
+      baseline_level:
+        lambda: |-
+          if (id(regen_active)) {
+            return esphome::optional<float>(id(regen_baseline));
+          }
+          return {};
+      drop_percentage:
+        lambda: |-
+          if (id(regen_active)) {
+            return esphome::optional<float>(id(drop_amount));
+          }
+          return {};
+      minutes_active:
+        lambda: |-
+          if (id(regen_active)) {
+            unsigned long elapsed_ms = millis() - id(regen_start_time);
+            return esphome::optional<unsigned long>(elapsed_ms / 60000);
+          }
+          return {};
+
 # Status text
 text_sensor:
   - platform: template
@@ -363,30 +523,56 @@ text_sensor:
     icon: "mdi:information-variant"
     update_interval: never  # Only updates when triggered
     lambda: |-
+      // Freeze status during regeneration cycle
+      if (id(regen_active)) {
+        return {id(last_valid_status)};
+      }
+
       float level = id(salt_level_percent).state;
       float full_threshold_val = id(full_threshold)->state;
       float good_threshold_val = id(good_threshold)->state;
       float low_threshold_val = id(low_threshold)->state;
       float critical_threshold_val = id(critical_threshold)->state;
 
-      std::string status;
+      // Calculate what status should be based on current level
+      std::string new_status;
       if (isnan(level)) {
-        status = "Checking...";
+        new_status = "Checking...";
       } else if (level >= full_threshold_val) {
-        status = "Full";
+        new_status = "Full";
       } else if (level >= good_threshold_val) {
-        status = "Good";
+        new_status = "Good";
       } else if (level >= low_threshold_val) {
-        status = "Low - Add Salt Soon";
+        new_status = "Low - Add Salt Soon";
       } else if (level >= critical_threshold_val) {
-        status = "Critical - Add Salt NOW!";
+        new_status = "Critical - Add Salt NOW!";
       } else {
-        status = "Critical - Add Salt NOW!";
+        new_status = "Critical - Add Salt NOW!";
       }
 
-      // Store last valid status
-      id(last_valid_status) = status;
-      return {status};
+      // 30-minute confirmation delay before changing status
+      unsigned long current_time = millis();
+      const unsigned long CONFIRMATION_DELAY = 1800000;  // 30 minutes in milliseconds
+
+      if (new_status != id(last_valid_status)) {
+        // Status wants to change
+        if (id(pending_status) != new_status) {
+          // New pending status, start timer
+          id(pending_status) = new_status;
+          id(pending_status_time) = current_time;
+          return {id(last_valid_status)};  // Keep showing old status
+        }
+
+        // Check if enough time has passed
+        if (current_time - id(pending_status_time) < CONFIRMATION_DELAY) {
+          return {id(last_valid_status)};  // Still waiting for confirmation
+        }
+      }
+
+      // Status confirmed stable, update it
+      id(pending_status) = "";
+      id(last_valid_status) = new_status;
+      return {new_status};
 
 # Fast update interval for calibration mode
 interval:
