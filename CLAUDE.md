@@ -292,7 +292,8 @@ esphome logs src/water-softener-s3-dev.yaml --device 192.168.86.104
 
 1. Update version in webinstall configs (e.g., `1.3.1-s3`, `1.3.1-lite`)
 2. Commit changes
-3. Create and push git tag: `git tag -a 1.3.1 -m "Release v1.3.1"
+3. Create and push git tag (NO "v" prefix): `git tag -a 1.5.0 -m "Release 1.5.0"`
+   - **IMPORTANT**: Use `1.5.0` format, NOT `v1.5.0` (this project does not use "v" prefix)
 4. Update `dashboard_import` URLs to reference new tag
 5. Compile both firmware variants
 6. Copy to docs/ and update manifest files
