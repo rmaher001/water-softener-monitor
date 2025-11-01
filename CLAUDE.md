@@ -9,11 +9,14 @@ ESPHome-based water softener salt level monitoring system using M5Stack ATOM har
 - Web server enabled (http://water-softener-monitor-lite.local or -lite-dev.local for dev)
 - I2C: SDA=GPIO26, SCL=GPIO32
 - Button: GPIO39 (no internal pullup)
+- RGB LED: GPIO27 (WS2812B)
 
 ### ATOM S3 (ESP32-S3)
 - Arduino framework (ESP-IDF has persistence issues on S3)
 - Web server disabled (socket exhaustion)
 - I2C: SDA=GPIO2, SCL=GPIO1
+- Button: GPIO41 (internal pullup)
+- RGB LED: GPIO35 (SK6812)
 - Configuration via Home Assistant only
 
 ## Project Structure
@@ -154,7 +157,7 @@ The "recovery" in sensor readings is **not salt regenerating** - it's the brine 
 
 **Status Sensor Behavior:**
 - "Salt Status" text sensor freezes during regeneration to prevent false alerts
-- Status changes require 30-minute confirmation delay (prevents false positives during regen detection lag and refills)
+- Status changes respond immediately (no confirmation delay as of v1.6.0)
 
 ### Home Assistant Automation Examples
 
@@ -260,6 +263,73 @@ automation:
 ```
 
 **Note:** Adjust thresholds and timing based on your specific water softener model and usage patterns. Time-based softeners typically regenerate daily, while demand-based softeners may run every 3-7 days.
+
+## Manual Refill Confirmation & Status Hysteresis (1.6.0+)
+
+### Problem: Water Level Fluctuations vs. Actual Salt Changes
+
+**Background:**
+- Brine tanks maintain standing water that fluctuates ±5cm around regeneration cycles
+- ToF sensor measures distance to water surface, not salt level
+- Water level changes after regeneration make status appear to improve (e.g., "Moderate" → "Good")
+- This is incorrect - salt was consumed during regeneration, not added
+
+**Example:**
+```
+Before regen: Distance 47cm, Status "Moderate" (45%)
+After regen:  Distance 41cm, Status "Good" (52%) ← WRONG!
+Reality:      Salt was consumed, water level changed
+```
+
+### Solution: Manual Refill Confirmation Button
+
+**Hardware Button (ATOM Lite only):**
+- Hold button on ATOM Lite for 3-5 seconds to confirm salt refill
+- LED flashes 3 times during hold, then solid for 2 seconds to confirm
+- Records refill timestamp in device memory (persisted across reboots)
+
+**Status Hysteresis Rule:**
+- Status can **ONLY improve** (Critical→Low, Low→Good, Good→Full) if refill button was pressed in last 24 hours
+- Status can always **degrade** (Good→Low, Low→Critical) without button press
+- Prevents false status improvements from water level fluctuations
+
+**Behavior:**
+```
+Day 1: Status = "Moderate" (45%)
+Day 2: Regen runs, water settles, reading shows 52%
+       Status: STAYS "Moderate" (can't improve without refill)
+Day 3: Reading drops to 38%
+       Status: Changes to "Low" (degradation always allowed)
+Day 4: User refills salt, holds button 3-5 seconds
+       LED flashes, confirms, reading shows 75%
+       Status: Changes to "Good" (improvement allowed after refill)
+```
+
+**Benefits:**
+- Eliminates false status improvements from water noise
+- User has definitive control over status changes
+- Salt level trend always moves downward between refills (as expected)
+- Simple physical confirmation - no network or HA required
+
+**LED Feedback:**
+- Button press detected → LED flashes 3 times (600ms total)
+- Refill confirmed → LED solid for 2 seconds
+- No LED feedback → Button press too short or too long (must be 3-5 seconds)
+
+**Logs (ESPHome):**
+```
+[refill] Manual refill confirmed - distance: 41.2cm, level: 75%
+```
+
+**Technical Details:**
+- Refill timestamp stored in NVS (persisted across reboots and power loss)
+- Hysteresis check happens before any status change
+- 24-hour window resets on each button press
+- Works entirely on-device, no Home Assistant connection required
+
+**Hardware Support:**
+- **ATOM Lite**: Button on GPIO39, RGB LED on GPIO27 (WS2812B)
+- **ATOM S3**: Button on GPIO41, RGB LED on GPIO35 (SK6812)
 
 ## Configuration Parameters
 

@@ -53,6 +53,17 @@ i2c:
   scl: GPIO1
   scan: true
 
+# RGB LED for button feedback (ATOM S3 built-in)
+light:
+  - platform: fastled_clockless
+    chipset: SK6812
+    pin: GPIO35
+    num_leds: 1
+    rgb_order: GRB
+    name: "Status LED"
+    id: status_led
+    internal: true
+
 # Global variables
 
 globals:
@@ -71,15 +82,10 @@ globals:
     restore_value: yes
     initial_value: '"Checking..."'
 
-  # Status change delay tracking
-  - id: pending_status
-    type: std::string
-    restore_value: no
-    initial_value: '""'
-
-  - id: pending_status_time
+  # Manual refill tracking
+  - id: last_manual_refill_time
     type: unsigned long
-    restore_value: no
+    restore_value: yes
     initial_value: '0'
 
   # Regeneration detection tracking
@@ -367,6 +373,30 @@ binary_sensor:
     filters:
       - delayed_on: 10ms
       - delayed_off: 10ms
+    on_click:
+      # Long press (3-5 seconds) = Manual refill confirmation
+      - min_length: 3000ms
+        max_length: 5000ms
+        then:
+          # Flash LED 3 times
+          - repeat:
+              count: 3
+              then:
+                - light.turn_on: status_led
+                - delay: 200ms
+                - light.turn_off: status_led
+                - delay: 200ms
+
+          # Record refill timestamp
+          - lambda: |-
+              id(last_manual_refill_time) = millis() / 1000;
+              ESP_LOGI("refill", "Manual refill confirmed - distance: %.1fcm, level: %.1f%%",
+                       id(salt_distance_raw).state, id(salt_level_percent).state);
+
+          # LED solid for 2 seconds to confirm
+          - light.turn_on: status_led
+          - delay: 2000ms
+          - light.turn_off: status_led
 
   - platform: template
     name: "Sensor Out of Range"
@@ -508,48 +538,41 @@ text_sensor:
       }
 
       float level = id(salt_level_percent).state;
-      float full_threshold_val = id(full_threshold)->state;
-      float good_threshold_val = id(good_threshold)->state;
-      float low_threshold_val = id(low_threshold)->state;
-      float critical_threshold_val = id(critical_threshold)->state;
 
       // Calculate what status should be based on current level
       std::string new_status;
       if (isnan(level)) {
         new_status = "Checking...";
-      } else if (level >= full_threshold_val) {
+      } else if (level >= id(full_threshold)->state) {
         new_status = "Full";
-      } else if (level >= good_threshold_val) {
+      } else if (level >= id(good_threshold)->state) {
         new_status = "Good";
-      } else if (level >= low_threshold_val) {
+      } else if (level >= id(low_threshold)->state) {
         new_status = "Low - Add Salt Soon";
-      } else if (level >= critical_threshold_val) {
-        new_status = "Critical - Add Salt NOW!";
       } else {
         new_status = "Critical - Add Salt NOW!";
       }
 
-      // 30-minute confirmation delay before changing status
-      unsigned long current_time = millis();
-      const unsigned long CONFIRMATION_DELAY = 1800000;  // 30 minutes in milliseconds
+      // Rank statuses (higher = better)
+      int rank_current = 0, rank_new = 0;
+      if (id(last_valid_status) == "Full") rank_current = 3;
+      else if (id(last_valid_status) == "Good") rank_current = 2;
+      else if (id(last_valid_status) == "Low - Add Salt Soon") rank_current = 1;
 
-      if (new_status != id(last_valid_status)) {
-        // Status wants to change
-        if (id(pending_status) != new_status) {
-          // New pending status, start timer
-          id(pending_status) = new_status;
-          id(pending_status_time) = current_time;
-          return {id(last_valid_status)};  // Keep showing old status
-        }
+      if (new_status == "Full") rank_new = 3;
+      else if (new_status == "Good") rank_new = 2;
+      else if (new_status == "Low - Add Salt Soon") rank_new = 1;
 
-        // Check if enough time has passed
-        if (current_time - id(pending_status_time) < CONFIRMATION_DELAY) {
-          return {id(last_valid_status)};  // Still waiting for confirmation
+      // HYSTERESIS: Status can only improve if refill occurred in last 24 hours
+      if (rank_new > rank_current) {
+        unsigned long hrs_since_refill = (millis()/1000 - id(last_manual_refill_time)) / 3600;
+        if (hrs_since_refill > 24) {
+          // Keep current status, don't improve
+          return {id(last_valid_status)};
         }
       }
 
-      // Status confirmed stable, update it
-      id(pending_status) = "";
+      // Update status immediately (no confirmation delay)
       id(last_valid_status) = new_status;
       return {new_status};
 
