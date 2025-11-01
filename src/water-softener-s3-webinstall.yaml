@@ -17,7 +17,7 @@ esphome:
 
 # Dashboard import for ESPHome Dashboard integration and updates
 dashboard_import:
-  package_import_url: github://rmaher001/water-softener-monitor/src/water-softener-s3-webinstall.yaml@1.5.0
+  package_import_url: github://rmaher001/water-softener-monitor/src/water-softener-s3-webinstall.yaml@v1.6.0
   import_full_config: false
 
 # Include the S3 core package for all sensor/config logic
