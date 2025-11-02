@@ -45,8 +45,8 @@ i2c:
 
 # RGB LED for button feedback (ATOM Lite built-in)
 light:
-  - platform: fastled_clockless
-    chipset: WS2812B
+  - platform: esp32_rmt_led_strip
+    chipset: WS2812
     pin: GPIO27
     num_leds: 1
     rgb_order: GRB
