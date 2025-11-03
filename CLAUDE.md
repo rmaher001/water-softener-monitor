@@ -382,11 +382,53 @@ Day 4: User refills salt, holds button 3-5 seconds
 - First cycle observation: 2% drop (real consumption)
 - Second cycle observation: 6% rise (lid misalignment, not real)
 
-**Current Status (as of Nov 2, 2025):**
-- Lid marked and positioned at baseline (41.8 cm / 64.8%)
-- Collecting clean baseline data with proper lid alignment
-- **Need 3-5 regeneration cycles (3-5 weeks)** to confirm consumption pattern
-- Data required before implementing v1.7.0 malfunction detection
+**Brine Tank Physics & Water Level Observations:**
+
+**Tank Configuration:**
+- Tank height: 82 cm
+- Current water level: 40 cm from bottom (16 inches)
+- Normal wet brine tank: 8-14 inches (research typical)
+- Salt is **submerged under water** (not above water line)
+- ToF sensor measures to **water surface**, not salt bed
+
+**Critical Detection Question:**
+Does the ToF approach work if salt is submerged? Depends on water level behavior:
+
+1. **Volume-based refill** (research indicates 3-4 gallons added per cycle):
+   - As salt depletes, total volume decreases
+   - Water level should gradually drop over weeks
+   - ToF reading increases → salt depletion detected ✓
+
+2. **Level-based refill** (constant water height maintained):
+   - Water level stays constant as salt depletes
+   - ToF reading stays the same → salt depletion NOT detected ❌
+
+**Injector/Venturi Concerns:**
+- Water level at 16" is above typical 8-14" range
+- Possible causes: Partially clogged injector, or normal for this model/settings
+- Clogged injector prevents complete brine draw, causing water accumulation
+- Observation plan: Monitor if water level is stable or creeping up over cycles
+
+**Variable Changes (Nov 2-3, 2025):**
+- Lid position marked and aligned to baseline
+- Softener settings adjusted (D0=7, hardness increased)
+- **All historical data before Nov 3 is not comparable**
+
+**Current Status (as of Nov 3, 2025):**
+- Baseline established post-regeneration: **40.9 cm / 66.3%** (with new settings)
+- First observation phase (2-3 cycles): Monitor water level stability
+  - If stable at ~40-41 cm → System operating normally, continue observation
+  - If creeping up (41 → 42 → 43 cm) → Injector needs cleaning before baseline collection
+- Second observation phase (3-5 cycles after system verified): Confirm consumption pattern
+- Data required before implementing v1.7.0 detection logic
+
+**Future v1.7.0 Implementation Plan:**
+- Add regeneration cycle counter (resets on manual refill button press)
+- Expose cycle count as sensor in Home Assistant
+- Detection logic TBD based on observational data:
+  - If ToF increases reliably → sensor-based detection
+  - If ToF stays constant → cycle-based estimation
+  - Hybrid approach likely needed for robust alerts
 
 **System Purpose:**
 - **Primary goal**: Alert when salt is low (prevent running out)
