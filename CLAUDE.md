@@ -106,7 +106,7 @@ Water softeners run a nightly regeneration cycle (typically 2-3 AM) that signifi
 - **~28 affected samples** out of 288 daily (10% of data)
 - **15-20% apparent drop** in salt level during brine draw
 - **1-2 hour recovery period** after cycle completes
-- **Actual salt consumption:** Only 1-2% per cycle (masked by water level changes)
+- **Actual salt consumption:** ~2% per cycle (masked by water level changes and ±1-2% measurement noise)
 
 ### Physical Explanation
 
@@ -114,7 +114,7 @@ The ToF distance sensor measures distance to the **water surface**, not the salt
 
 - **Brine Draw**: Water level drops → sensor reads longer distance → calculates lower salt percentage
 - **Refill**: Water level rises → sensor reads shorter distance → calculates higher salt percentage
-- **Reality**: Salt dissolves slowly (~1-2% consumed), but water level changes dramatically
+- **Reality**: Salt dissolves slowly (~2% consumed per cycle), but water level changes dramatically
 
 The "recovery" in sensor readings is **not salt regenerating** - it's the brine tank refilling with fresh water for tomorrow's cycle.
 
@@ -330,6 +330,69 @@ Day 4: User refills salt, holds button 3-5 seconds
 **Hardware Support:**
 - **ATOM Lite**: Button on GPIO39, RGB LED on GPIO27 (WS2812B)
 - **ATOM S3**: Button on GPIO41, RGB LED on GPIO35 (SK6812)
+
+## Measurement Accuracy & Lid Positioning
+
+### Physical Constraints
+
+**Hardware Layout:**
+- ToF sensor mounted **2 inches off-center** in round tank lid
+- Water surface not perfectly level across tank (±3 cm variation)
+- Lid rotation changes which part of water surface is measured
+- Tight lid fit prevents accidental rotation but allows manual adjustment
+
+**Rotational Sensitivity:**
+- Rotating lid across full range: **10% variance** (53-63% salt level)
+- Distance variation from rotation: **±6 cm** from center to edge
+- Critical issue: Reopening lid without alignment causes false readings
+
+### Lid Alignment Procedure
+
+**Required for Consistent Readings:**
+1. Mark both lid and tank rim at baseline position
+2. Baseline position: **41.5-41.8 cm distance** / **64-65% salt level**
+3. After opening lid (inspection/refill), align marks before closing
+4. Verify reading returns to expected range after realignment
+
+**Calibration Process:**
+1. Press calibration button for fast polling (100ms updates)
+2. Slowly rotate lid while monitoring readings
+3. Stop at baseline distance (41.5-41.8 cm)
+4. Mark lid edge and tank rim with permanent marker
+5. Document: "Lid must align with marks - misalignment causes ±5% error"
+
+### Measurement Error Budget
+
+**Normal Operating Conditions (with proper lid alignment):**
+- Sensor precision: ±0.24 cm std dev (excellent)
+- Peak-to-peak variation: 1.26 cm over 5 days
+- Coefficient of variation: 0.59% (stable)
+- **Realistic accuracy: ±1-2%** from water surface fluctuations
+
+**Implications:**
+- Day-to-day variations <3% are measurement noise, not real changes
+- Salt consumption (~2% per cycle) at edge of measurement resolution
+- Regeneration cycle drops (15-20%) easily detected above noise floor
+- Long-term trends reliable, single-cycle tracking unreliable
+
+### Salt Consumption Data
+
+**Confirmed from Regeneration Cycles:**
+- Actual salt consumption: **~2% per regeneration cycle**
+- First cycle observation: 2% drop (real consumption)
+- Second cycle observation: 6% rise (lid misalignment, not real)
+
+**Current Status (as of Nov 2, 2025):**
+- Lid marked and positioned at baseline (41.8 cm / 64.8%)
+- Collecting clean baseline data with proper lid alignment
+- **Need 3-5 regeneration cycles (3-5 weeks)** to confirm consumption pattern
+- Data required before implementing v1.7.0 malfunction detection
+
+**System Purpose:**
+- **Primary goal**: Alert when salt is low (prevent running out)
+- Regeneration detection: Confirms system operation
+- Consumption tracking: Unreliable due to ±1-2% noise vs 2% consumption
+- Manual refill button: Prevents false status improvements
 
 ## Configuration Parameters
 
