@@ -11,7 +11,7 @@ esp32:
   board: m5stack-atoms3
   variant: esp32s3
   framework:
-    type: arduino
+    type: esp-idf
 
 # Preferences with debounced flash writes to prevent overwhelming the system
 preferences:
@@ -40,12 +40,10 @@ logger:
 
 # API and OTA are configured in individual device files
 
-# Web server disabled due to Arduino framework socket exhaustion (error 23)
-# - Arduino framework needed for NVS persistence on ESP32-S3
-# - Arduino has limited sockets (10-16) that can't be increased via config
-# - Web server exhausts sockets causing API/OTA failures and crashes
-# - Users can configure via Home Assistant UI instead
-# - To fix: would need ESP-IDF + increased CONFIG_LWIP_MAX_SOCKETS, but ESP-IDF breaks persistence
+# Web server for standalone configuration (ESP-IDF supports this without socket exhaustion)
+web_server:
+  port: 80
+  version: 3
 
 # I2C for the ToF sensor (ATOM S3 Lite Grove port)
 i2c:
@@ -54,15 +52,16 @@ i2c:
   scan: true
 
 # RGB LED for button feedback (ATOM S3 built-in)
+# Using esp32_rmt_led_strip for ESP-IDF compatibility (fastled_clockless is Arduino-only)
 light:
-  - platform: fastled_clockless
-    chipset: SK6812
+  - platform: esp32_rmt_led_strip
+    id: status_led
+    name: "Status LED"
+    internal: true
     pin: GPIO35
     num_leds: 1
     rgb_order: GRB
-    name: "Status LED"
-    id: status_led
-    internal: true
+    chipset: SK6812
 
 # Global variables
 

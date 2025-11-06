@@ -12,12 +12,12 @@ ESPHome-based water softener salt level monitoring system using M5Stack ATOM har
 - RGB LED: GPIO27 (WS2812B)
 
 ### ATOM S3 (ESP32-S3)
-- Arduino framework (ESP-IDF has persistence issues on S3)
-- Web server disabled (socket exhaustion)
+- ESP-IDF framework (persistence issues resolved in ESPHome 2025.10+)
+- Web server enabled (http://water-softener-monitor.local or -s3-dev.local for dev)
 - I2C: SDA=GPIO2, SCL=GPIO1
 - Button: GPIO41 (internal pullup)
 - RGB LED: GPIO35 (SK6812)
-- Configuration via Home Assistant only
+- Configuration via web UI or Home Assistant
 
 ## Project Structure
 
