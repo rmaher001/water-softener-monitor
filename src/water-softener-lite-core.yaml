@@ -61,11 +61,6 @@ globals:
     restore_value: no
     initial_value: '0'
 
-  - id: last_valid_percentage
-    type: float
-    restore_value: yes
-    initial_value: '0.0'
-
   - id: last_valid_status
     type: std::string
     restore_value: yes
@@ -76,6 +71,34 @@ globals:
     type: unsigned long
     restore_value: yes
     initial_value: '0'
+
+  # W Learning system - waterline auto-learning
+  - id: waterline_w
+    type: float
+    restore_value: yes
+    initial_value: '0.0'  # 0 = not yet learned
+
+  - id: baseline_history
+    type: std::vector<float>
+    restore_value: no  # Cannot persist vectors in ESPHome NVS
+
+  - id: baseline_timestamps
+    type: std::vector<unsigned long>
+    restore_value: no  # Cannot persist vectors in ESPHome NVS
+
+  - id: w_learning_status
+    type: int
+    restore_value: yes
+    initial_value: '0'  # 0=waiting, 1=refining, 2=learned
+
+  - id: post_regen_stable
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+  - id: post_regen_readings
+    type: std::vector<float>
+    restore_value: no
 
   # Regeneration detection tracking
   - id: regen_active
@@ -118,9 +141,6 @@ number:
     unit_of_measurement: "cm"
     icon: "mdi:arrow-expand-vertical"
     mode: box
-    on_value:
-      then:
-        - component.update: salt_level_percent
 
   - platform: template
     name: "Full Level Distance"
@@ -135,9 +155,6 @@ number:
     unit_of_measurement: "cm"
     icon: "mdi:arrow-collapse-down"
     mode: box
-    on_value:
-      then:
-        - component.update: salt_level_percent
 
   - platform: template
     name: "Update Interval"
@@ -153,77 +170,118 @@ number:
     icon: "mdi:timer"
     mode: box
 
-  # Alert thresholds
+  # W Learning System
   - platform: template
-    name: "Critical Alert Threshold"
-    id: critical_threshold
+    name: "Waterline W"
+    id: waterline_w_sensor
+    entity_category: "diagnostic"
+    optimistic: true
+    min_value: 0
+    max_value: 150
+    step: 0.1
+    unit_of_measurement: "cm"
+    icon: "mdi:water-outline"
+    mode: box
+    initial_value: 0
+    restore_value: false
+    on_value:
+      then:
+        - lambda: |-
+            // This is a read-only display of the W global, update global if changed via UI
+            id(waterline_w) = x;
+
+  # Auto-refill detection configuration
+  - platform: template
+    name: "Auto Refill Drop Threshold"
+    id: auto_refill_drop_threshold
     entity_category: "config"
     optimistic: true
     restore_value: true
-    initial_value: 20
-    min_value: 0
-    max_value: 100
-    step: 5
-    unit_of_measurement: "%"
-    icon: "mdi:alert-octagon"
-    mode: slider
-    on_value:
-      then:
-        - component.update: salt_status_text
+    initial_value: 10
+    min_value: 5
+    max_value: 20
+    step: 1
+    unit_of_measurement: "cm"
+    icon: "mdi:arrow-collapse-down"
+    mode: box
 
+  # Button press duration configuration
   - platform: template
-    name: "Full Threshold"
-    id: full_threshold
+    name: "Manual Refill Press Min Duration"
+    id: manual_refill_press_min
     entity_category: "config"
     optimistic: true
     restore_value: true
-    initial_value: 80
-    min_value: 0
-    max_value: 100
-    step: 5
-    unit_of_measurement: "%"
-    icon: "mdi:check-circle"
-    mode: slider
-    on_value:
-      then:
-        - component.update: salt_status_text
+    initial_value: 3
+    min_value: 1
+    max_value: 10
+    step: 0.5
+    unit_of_measurement: "s"
+    icon: "mdi:timer"
+    mode: box
 
   - platform: template
-    name: "Good Threshold"
-    id: good_threshold
+    name: "Manual Refill Press Max Duration"
+    id: manual_refill_press_max
     entity_category: "config"
     optimistic: true
     restore_value: true
-    initial_value: 60
-    min_value: 0
-    max_value: 100
-    step: 5
-    unit_of_measurement: "%"
-    icon: "mdi:check"
-    mode: slider
-    on_value:
-      then:
-        - component.update: salt_status_text
+    initial_value: 5
+    min_value: 1
+    max_value: 10
+    step: 0.5
+    unit_of_measurement: "s"
+    icon: "mdi:timer"
+    mode: box
 
   - platform: template
-    name: "Low Alert Threshold"
-    id: low_threshold
+    name: "W Relearn Press Min Duration"
+    id: w_relearn_press_min
     entity_category: "config"
     optimistic: true
     restore_value: true
-    initial_value: 40
-    min_value: 0
-    max_value: 100
-    step: 5
-    unit_of_measurement: "%"
-    icon: "mdi:alert"
-    mode: slider
-    on_value:
-      then:
-        - component.update: salt_status_text
+    initial_value: 8
+    min_value: 5
+    max_value: 15
+    step: 0.5
+    unit_of_measurement: "s"
+    icon: "mdi:timer"
+    mode: box
 
-# Calibration mode switch
+  - platform: template
+    name: "W Relearn Press Max Duration"
+    id: w_relearn_press_max
+    entity_category: "config"
+    optimistic: true
+    restore_value: true
+    initial_value: 10
+    min_value: 5
+    max_value: 15
+    step: 0.5
+    unit_of_measurement: "s"
+    icon: "mdi:timer"
+    mode: box
+
+# Switches
 switch:
+  # Enable/disable auto-refill detection
+  - platform: template
+    name: "Auto Refill Detection Enabled"
+    id: auto_refill_detection_enabled
+    icon: "mdi:auto-fix"
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: "config"
+
+  - platform: template
+    name: "Manual Refill Button Enabled"
+    id: manual_refill_button_enabled
+    icon: "mdi:gesture-tap-button"
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: "config"
+
+  # Calibration mode switch
   - platform: template
     name: "Calibration Mode"
     id: calibration_mode
@@ -233,28 +291,38 @@ switch:
       - delay: 300s  # 5 minutes
       - switch.turn_off: calibration_mode
 
+# Scripts for non-blocking LED feedback
+script:
+  - id: flash_led_refill
+    mode: single
+    then:
+      - repeat:
+          count: 3
+          then:
+            - light.turn_on: status_led
+            - delay: 200ms
+            - light.turn_off: status_led
+            - delay: 200ms
+      - light.turn_on: status_led
+      - delay: 2000ms
+      - light.turn_off: status_led
+
+  - id: flash_led_relearn
+    mode: single
+    then:
+      - repeat:
+          count: 5
+          then:
+            - light.turn_on: status_led
+            - delay: 200ms
+            - light.turn_off: status_led
+            - delay: 200ms
+      - light.turn_on: status_led
+      - delay: 3000ms
+      - light.turn_off: status_led
+
 # Buttons
 button:
-  - platform: template
-    name: "Reset Thresholds to Defaults"
-    icon: "mdi:restore"
-    on_press:
-      - number.set:
-          id: full_threshold
-          value: 80
-      - delay: 100ms
-      - number.set:
-          id: good_threshold
-          value: 60
-      - delay: 100ms
-      - number.set:
-          id: low_threshold
-          value: 40
-      - delay: 100ms
-      - number.set:
-          id: critical_threshold
-          value: 20
-
   - platform: restart
     name: "Restart"
     icon: "mdi:restart"
@@ -277,53 +345,7 @@ sensor:
           send_every: 1
     on_value:
       then:
-        - component.update: salt_level_percent
         - component.update: salt_status_text
-
-  # Calculate salt level percentage
-  - platform: template
-    name: "Salt Level"
-    id: salt_level_percent
-    unit_of_measurement: "%"
-    icon: "mdi:water-percent"
-    accuracy_decimals: 0
-    update_interval: never  # Only updates when triggered
-    lambda: |-
-      // VL53L0X sensor hardware limits
-      const float SENSOR_MIN_RANGE = 3.0;   // cm
-      const float SENSOR_MAX_RANGE = 150.0; // cm
-
-      float tank_height = id(tank_height_cm).state;
-      float full_level = id(full_level_cm).state;
-      float current_distance = id(salt_distance_raw).state;
-
-      // Check if sensor reading is valid
-      bool is_valid = true;
-      if (isnan(current_distance) || isnan(tank_height) || isnan(full_level)) {
-        is_valid = false;
-      } else if (current_distance < SENSOR_MIN_RANGE) {
-        is_valid = false;
-      } else if (current_distance > SENSOR_MAX_RANGE) {
-        is_valid = false;
-      }
-
-      if (!is_valid) {
-        // Return last valid value
-        return id(last_valid_percentage);
-      }
-
-      // Calculate percentage
-      float salt_height = tank_height - current_distance;
-      float max_salt_height = tank_height - full_level;
-      float percentage = (salt_height / max_salt_height) * 100.0;
-
-      // Clamp to 0-100%
-      if (percentage > 100.0) percentage = 100.0;
-      if (percentage < 0.0) percentage = 0.0;
-
-      // Store and return valid value
-      id(last_valid_percentage) = percentage;
-      return percentage;
 
   # WiFi signal strength
   - platform: wifi_signal
@@ -345,29 +367,44 @@ binary_sensor:
       - delayed_on: 10ms
       - delayed_off: 10ms
     on_click:
+      # Very long press (8-10 seconds) = Force W relearn
+      - min_length: 8000ms
+        max_length: 10000ms
+        then:
+          # Force relearn W from current distance
+          - lambda: |-
+              float current_distance = id(salt_distance_raw).state;
+              if (!isnan(current_distance)) {
+                id(waterline_w) = current_distance;
+                id(waterline_w_sensor)->publish_state(current_distance);
+                id(baseline_history).clear();
+                id(baseline_timestamps).clear();
+                id(w_learning_status) = 0;  // Reset to waiting
+                ESP_LOGI("w_learn", "Forced W relearn - W set to: %.1fcm", current_distance);
+              }
+
+          # Flash LED 5 times to confirm
+          - script.execute: flash_led_relearn
+
       # Long press (3-5 seconds) = Manual refill confirmation
       - min_length: 3000ms
         max_length: 5000ms
         then:
-          # Flash LED 3 times
-          - repeat:
-              count: 3
+          - if:
+              condition:
+                switch.is_on: manual_refill_button_enabled
               then:
-                - light.turn_on: status_led
-                - delay: 200ms
-                - light.turn_off: status_led
-                - delay: 200ms
+                # Record refill timestamp and reset W learning
+                - lambda: |-
+                    id(last_manual_refill_time) = millis() / 1000;
+                    id(baseline_history).clear();
+                    id(baseline_timestamps).clear();
+                    id(w_learning_status) = 0;  // Reset to waiting
+                    ESP_LOGI("refill", "Manual refill confirmed - distance: %.1fcm, resetting W learning",
+                             id(salt_distance_raw).state);
 
-          # Record refill timestamp
-          - lambda: |-
-              id(last_manual_refill_time) = millis() / 1000;
-              ESP_LOGI("refill", "Manual refill confirmed - distance: %.1fcm, level: %.1f%%",
-                       id(salt_distance_raw).state, id(salt_level_percent).state);
-
-          # LED solid for 2 seconds to confirm
-          - light.turn_on: status_led
-          - delay: 2000ms
-          - light.turn_off: status_led
+                # Flash LED 3 times to confirm
+                - script.execute: flash_led_refill
 
   - platform: template
     name: "Sensor Out of Range"
@@ -397,60 +434,62 @@ binary_sensor:
     id: regen_cycle_active
     icon: "mdi:water-sync"
     lambda: |-
-      float current_level = id(salt_level_percent).state;
+      float current_distance = id(salt_distance_raw).state;
       unsigned long current_time = millis();
 
       // Skip if invalid reading
-      if (isnan(current_level)) {
+      if (isnan(current_distance)) {
         return id(regen_active);
       }
 
-      // Maintain rolling window of recent readings for stability check
-      if (id(recent_readings).size() >= 6) {
-        id(recent_readings).erase(id(recent_readings).begin());
-      }
-      id(recent_readings).push_back(current_level);
-
       // === START DETECTION ===
       if (!id(regen_active)) {
-        // Check for sudden drop indicating regen start
-        // Method 1: >3% drop in 5 minutes (1 sample at 5-min intervals)
-        // Method 2: >5% drop in 10 minutes (2 samples)
+        // Check for sudden rise in distance (water level dropping) indicating regen start
+        // Method 1: >3cm rise in 5 minutes (compare with most recent reading)
+        // Method 2: >5cm rise in 10 minutes (compare with 2 samples ago)
 
         bool start_detected = false;
 
-        if (id(recent_readings).size() >= 2) {
-          // Check 5-minute drop (current vs 1 sample ago)
-          float drop_5min = id(recent_readings)[id(recent_readings).size() - 2] - current_level;
-          if (drop_5min > 3.0) {
+        if (id(recent_readings).size() >= 1) {
+          // Check 5-minute rise (current vs most recent previous reading)
+          float rise_5min = current_distance - id(recent_readings).back();
+          if (rise_5min > 3.0) {
             start_detected = true;
+            ESP_LOGD("regen", "5-min rise detected: %.1fcm", rise_5min);
           }
         }
 
-        if (!start_detected && id(recent_readings).size() >= 3) {
-          // Check 10-minute drop (current vs 2 samples ago)
-          float drop_10min = id(recent_readings)[id(recent_readings).size() - 3] - current_level;
-          if (drop_10min > 5.0) {
+        if (!start_detected && id(recent_readings).size() >= 2) {
+          // Check 10-minute rise (current vs 2 samples ago)
+          float rise_10min = current_distance - id(recent_readings)[id(recent_readings).size() - 2];
+          if (rise_10min > 5.0) {
             start_detected = true;
+            ESP_LOGD("regen", "10-min rise detected: %.1fcm", rise_10min);
           }
         }
 
         if (start_detected) {
           // Regen cycle started!
           id(regen_active) = true;
-          id(regen_baseline) = id(recent_readings)[0];  // Use oldest reading as baseline
+          id(regen_baseline) = id(recent_readings).front();  // Use oldest reading as baseline
           id(regen_start_time) = current_time;
-          id(drop_amount) = id(regen_baseline) - current_level;
-          ESP_LOGI("regen", "Regeneration started - baseline: %.1f%%, drop: %.1f%%",
+          id(drop_amount) = current_distance - id(regen_baseline);
+          ESP_LOGI("regen", "Regeneration started - baseline: %.1fcm, rise: %.1fcm",
                    id(regen_baseline), id(drop_amount));
         }
       }
+
+      // Maintain rolling window of recent readings (after detection check)
+      if (id(recent_readings).size() >= 6) {
+        id(recent_readings).erase(id(recent_readings).begin());
+      }
+      id(recent_readings).push_back(current_distance);
 
       // === END DETECTION ===
       if (id(regen_active)) {
         unsigned long elapsed_seconds = (current_time - id(regen_start_time)) / 1000;
         unsigned long elapsed_minutes = elapsed_seconds / 60;
-        float current_drop = id(regen_baseline) - current_level;
+        float current_rise = current_distance - id(regen_baseline);
 
         // Safety timeout: 4 hours maximum
         if (elapsed_minutes > 240) {
@@ -460,23 +499,24 @@ binary_sensor:
           return false;
         }
 
-        // False alarm reset: If <5% total drop after 1 hour
+        // False alarm reset: If <5cm total rise after 1 hour
         if (elapsed_minutes > 60 && id(drop_amount) < 5.0) {
-          ESP_LOGI("regen", "Regeneration ended - false alarm (only %.1f%% drop)", id(drop_amount));
+          ESP_LOGI("regen", "Regeneration ended - false alarm (only %.1fcm rise)", id(drop_amount));
           id(regen_active) = false;
           id(recent_readings).clear();
           return false;
         }
 
         // Check for end condition: 50% recovery + stability
-        float recovery_target = id(regen_baseline) - (id(drop_amount) * 0.5);
-        bool recovered = current_level >= recovery_target;
+        // Recovery = distance decreasing back toward baseline
+        float recovery_target = id(regen_baseline) + (id(drop_amount) * 0.5);
+        bool recovered = current_distance <= recovery_target;
 
         if (recovered && id(recent_readings).size() >= 6) {
-          // Check stability: ±2% variation over last 30 minutes (6 samples)
-          float min_level = *std::min_element(id(recent_readings).begin(), id(recent_readings).end());
-          float max_level = *std::max_element(id(recent_readings).begin(), id(recent_readings).end());
-          float variation = max_level - min_level;
+          // Check stability: ±2cm variation over last 30 minutes (6 samples)
+          float min_distance = *std::min_element(id(recent_readings).begin(), id(recent_readings).end());
+          float max_distance = *std::max_element(id(recent_readings).begin(), id(recent_readings).end());
+          float variation = max_distance - min_distance;
 
           if (variation <= 2.0) {
             // Regeneration complete!
@@ -487,13 +527,82 @@ binary_sensor:
           }
         }
 
-        // Update drop amount if current drop is larger
-        if (current_drop > id(drop_amount)) {
-          id(drop_amount) = current_drop;
+        // Update rise amount if current rise is larger
+        if (current_rise > id(drop_amount)) {
+          id(drop_amount) = current_rise;
         }
       }
 
       return id(regen_active);
+
+  # Malfunction detection sensors
+  - platform: template
+    name: "Salt Refill Detected"
+    id: salt_refill_detected
+    icon: "mdi:bag-personal"
+    device_class: presence
+    lambda: |-
+      // Auto-refill detection logic placeholder
+      // Will be implemented in button handler
+      return false;
+
+  - platform: template
+    name: "Overfill Suspected"
+    id: overfill_suspected
+    icon: "mdi:water-alert"
+    device_class: problem
+    lambda: |-
+      // Check if W has been increasing abnormally over last 5 cycles
+      if (id(baseline_history).size() < 5) {
+        return false;
+      }
+      float first_w = id(baseline_history)[0];
+      float last_w = id(baseline_history)[id(baseline_history).size() - 1];
+      float change = first_w - last_w;  // Decrease in distance = water rising
+      // W decreasing by 10cm means water rising 10cm
+      return change >= 10.0;
+
+  - platform: template
+    name: "Drain Leak Suspected"
+    id: drain_leak_suspected
+    icon: "mdi:pipe-leak"
+    device_class: problem
+    lambda: |-
+      // Check if W has been decreasing abnormally over last 5 cycles
+      if (id(baseline_history).size() < 5) {
+        return false;
+      }
+      float first_w = id(baseline_history)[0];
+      float last_w = id(baseline_history)[id(baseline_history).size() - 1];
+      float change = last_w - first_w;  // Increase in distance = water dropping
+      // W increasing by 10cm means water dropping 10cm
+      return change >= 10.0;
+
+  - platform: template
+    name: "Overflow Risk"
+    id: overflow_risk
+    icon: "mdi:alert-octagon"
+    device_class: safety
+    lambda: |-
+      float current_distance = id(salt_distance_raw).state;
+      if (isnan(current_distance)) {
+        return false;
+      }
+      // Alert if distance is 10cm or less (tank almost full)
+      return current_distance <= 10.0;
+
+  - platform: template
+    name: "High Waterline Advisory"
+    id: high_waterline_advisory
+    icon: "mdi:information"
+    device_class: problem
+    lambda: |-
+      float w = id(waterline_w);
+      // If W < 50cm, water is in top half of tank (potentially too high)
+      if (w > 0.1 && w < 50.0) {
+        return true;
+      }
+      return false;
 
 # Status text
 text_sensor:
@@ -508,19 +617,33 @@ text_sensor:
         return {id(last_valid_status)};
       }
 
-      float level = id(salt_level_percent).state;
+      // Check W learning status
+      int learning_status = id(w_learning_status);
+      if (learning_status == 0) {
+        return {"Learning - Waiting for first regeneration"};
+      }
 
-      // Calculate what status should be based on current level
+      float distance = id(salt_distance_raw).state;
+      float w = id(waterline_w);
+
+      // Calculate what status should be based on W-based distance thresholds
       std::string new_status;
-      if (isnan(level)) {
+      if (isnan(distance)) {
         new_status = "Checking...";
-      } else if (level >= id(full_threshold)->state) {
+      } else if (learning_status == 1) {
+        // Still refining W, show distance only
+        new_status = "Learning - Refining baseline (" + to_string((int)distance) + " cm)";
+      } else if (distance <= 25.0) {
+        // Full: absolute distance ≤ 25cm
         new_status = "Full";
-      } else if (level >= id(good_threshold)->state) {
+      } else if (distance < (w - 15.0)) {
+        // Good: distance < W - 15cm
         new_status = "Good";
-      } else if (level >= id(low_threshold)->state) {
+      } else if (distance < (w - 10.0)) {
+        // Low: W - 15cm ≤ distance < W - 10cm
         new_status = "Low - Add Salt Soon";
       } else {
+        // Critical: distance ≥ W - 10cm
         new_status = "Critical - Add Salt NOW!";
       }
 
@@ -536,7 +659,17 @@ text_sensor:
 
       // HYSTERESIS: Status can only improve if refill occurred in last 24 hours
       if (rank_new > rank_current) {
-        unsigned long hrs_since_refill = (millis()/1000 - id(last_manual_refill_time)) / 3600;
+        // Handle millis() rollover correctly (after ~49.7 days)
+        unsigned long current_sec = millis() / 1000;
+        unsigned long elapsed_sec;
+        if (current_sec >= id(last_manual_refill_time)) {
+          elapsed_sec = current_sec - id(last_manual_refill_time);
+        } else {
+          // Rollover occurred: wrap around ULONG_MAX
+          elapsed_sec = (ULONG_MAX - id(last_manual_refill_time)) + current_sec + 1;
+        }
+        unsigned long hrs_since_refill = elapsed_sec / 3600;
+
         if (hrs_since_refill > 24) {
           // Keep current status, don't improve
           return {id(last_valid_status)};
@@ -553,6 +686,37 @@ text_sensor:
     lambda: |-
       return {"${version}"};
 
+  - platform: template
+    name: "W Learning Status"
+    id: w_learning_status_text
+    icon: "mdi:school"
+    entity_category: "diagnostic"
+    lambda: |-
+      int status = id(w_learning_status);
+      if (status == 0) {
+        return {"Learning - Waiting for first regeneration"};
+      } else if (status == 1) {
+        return {"Learning - Refining (" + to_string(id(baseline_history).size()) + " cycles)"};
+      } else {
+        return {"Learned"};
+      }
+
+  - platform: template
+    name: "Baseline History"
+    id: baseline_history_text
+    icon: "mdi:history"
+    entity_category: "diagnostic"
+    lambda: |-
+      std::string result = "";
+      for (size_t i = 0; i < id(baseline_history).size() && i < 30; i++) {
+        if (i > 0) result += ", ";
+        result += str_sprintf("%.1f", id(baseline_history)[i]);
+      }
+      if (result.empty()) {
+        return {"No data yet"};
+      }
+      return {result};
+
 # Fast update interval for calibration mode
 interval:
   - interval: 100ms
@@ -562,6 +726,198 @@ interval:
             switch.is_on: calibration_mode
           then:
             - component.update: salt_distance_raw
+
+  # W Learning state machine - runs every 5 seconds
+  - interval: 5s
+    then:
+      - lambda: |-
+          // W Learning: Collect baseline after regeneration ends
+          static bool was_regen_active = false;
+          static std::vector<float> stability_buffer;
+          static unsigned long learning_start_time = 0;
+
+          float current_distance = id(salt_distance_raw).state;
+          bool currently_in_regen = id(regen_active);
+
+          // Detect regeneration just ended
+          if (was_regen_active && !currently_in_regen) {
+            ESP_LOGI("w_learn", "Regeneration ended, starting baseline collection");
+            id(post_regen_stable) = true;
+            stability_buffer.clear();
+            id(post_regen_readings).clear();
+            learning_start_time = millis();
+          }
+          was_regen_active = currently_in_regen;
+
+          // If in post-regen learning phase
+          if (id(post_regen_stable) && !isnan(current_distance)) {
+            unsigned long elapsed_ms = millis() - learning_start_time;
+
+            // Collect readings for stability check (2 minutes of data)
+            stability_buffer.push_back(current_distance);
+            if (stability_buffer.size() > 24) {  // 24 samples = 2 minutes at 5s intervals
+              stability_buffer.erase(stability_buffer.begin());
+            }
+
+            // Check if stable (variance < 0.5 cm for at least 2 minutes)
+            if (stability_buffer.size() >= 24) {
+              // Two-pass variance calculation (numerically stable)
+              // First pass: calculate mean
+              float sum = 0;
+              for (float v : stability_buffer) {
+                sum += v;
+              }
+              float mean = sum / stability_buffer.size();
+
+              // Second pass: calculate variance
+              float var_sum = 0;
+              for (float v : stability_buffer) {
+                float diff = v - mean;
+                var_sum += diff * diff;
+              }
+              float variance = var_sum / stability_buffer.size();
+              float std_dev = sqrt(variance);
+
+              if (std_dev < 0.5) {
+                // Stable! Start collecting 10 readings for baseline
+                id(post_regen_readings).push_back(current_distance);
+
+                if (id(post_regen_readings).size() >= 10) {
+                  // Calculate baseline average
+                  float baseline_sum = 0;
+                  for (float r : id(post_regen_readings)) {
+                    baseline_sum += r;
+                  }
+                  float baseline = baseline_sum / id(post_regen_readings).size();
+
+                  // Lid misalignment detection: reject baseline if it jumps >5cm
+                  if (id(baseline_history).size() > 0) {
+                    float last_baseline = id(baseline_history).back();
+                    float diff = abs(baseline - last_baseline);
+                    if (diff > 5.0) {
+                      ESP_LOGW("w_learn", "Baseline REJECTED - %.1fcm jump from previous (%.1f vs %.1f). Lid misaligned?",
+                               diff, baseline, last_baseline);
+                      id(post_regen_stable) = false;
+                      id(post_regen_readings).clear();
+                      return;  // Abort baseline collection, wait for next regen
+                    }
+                  }
+
+                  // Store in history (keep last 30)
+                  id(baseline_history).push_back(baseline);
+                  id(baseline_timestamps).push_back(millis() / 1000);
+                  while (id(baseline_history).size() > 30) {
+                    id(baseline_history).erase(id(baseline_history).begin());
+                    id(baseline_timestamps).erase(id(baseline_timestamps).begin());
+                  }
+
+                  // Update W
+                  id(waterline_w) = baseline;
+
+                  // Update learning status
+                  if (id(w_learning_status) == 0) {
+                    id(w_learning_status) = 1;  // First baseline, now refining
+                  }
+
+                  // Check for convergence (std dev of last 5 baselines < 1.5 cm)
+                  if (id(baseline_history).size() >= 5) {
+                    // Two-pass variance calculation (numerically stable)
+                    // First pass: calculate mean of last 5 baselines
+                    float b_sum = 0;
+                    size_t start = id(baseline_history).size() - 5;
+                    for (size_t i = start; i < id(baseline_history).size(); i++) {
+                      b_sum += id(baseline_history)[i];
+                    }
+                    float b_mean = b_sum / 5.0;
+
+                    // Second pass: calculate variance
+                    float b_var_sum = 0;
+                    for (size_t i = start; i < id(baseline_history).size(); i++) {
+                      float diff = id(baseline_history)[i] - b_mean;
+                      b_var_sum += diff * diff;
+                    }
+                    float b_var = b_var_sum / 5.0;
+                    float b_std = sqrt(b_var);
+
+                    if (b_std < 1.5) {
+                      id(w_learning_status) = 2;  // Learned/converged
+                      ESP_LOGI("w_learn", "W converged! std_dev=%.2f, W=%.1f", b_std, baseline);
+                    } else {
+                      ESP_LOGI("w_learn", "W refining - std_dev=%.2f, W=%.1f", b_std, baseline);
+                    }
+                  } else {
+                    ESP_LOGI("w_learn", "Baseline recorded: W=%.1f (%zu cycles)", baseline, id(baseline_history).size());
+                  }
+
+                  // Done with this learning cycle
+                  id(post_regen_stable) = false;
+                  stability_buffer.clear();
+                  id(post_regen_readings).clear();
+                }
+              }
+            }
+          }
+
+  # Auto-refill detection - runs every 5 seconds
+  - interval: 5s
+    then:
+      - lambda: |-
+          // Auto-refill detection: detect sudden drop in distance outside regen
+          static float last_distance = 0;
+          static std::vector<float> variance_buffer;
+
+          if (!id(auto_refill_detection_enabled).state) {
+            return;  // Feature disabled
+          }
+
+          float current_distance = id(salt_distance_raw).state;
+          if (isnan(current_distance)) {
+            return;
+          }
+
+          // Track variance over last 30 seconds (6 samples at 5s intervals)
+          variance_buffer.push_back(current_distance);
+          if (variance_buffer.size() > 6) {
+            variance_buffer.erase(variance_buffer.begin());
+          }
+
+          if (variance_buffer.size() >= 3 && last_distance > 0) {
+            // Two-pass variance calculation (numerically stable)
+            // First pass: calculate mean
+            float sum = 0;
+            for (float v : variance_buffer) {
+              sum += v;
+            }
+            float mean = sum / variance_buffer.size();
+
+            // Second pass: calculate variance
+            float var_sum = 0;
+            for (float v : variance_buffer) {
+              float diff = v - mean;
+              var_sum += diff * diff;
+            }
+            float variance = var_sum / variance_buffer.size();
+            float std_dev = sqrt(variance);
+
+            // Check for refill: sudden drop + outside regen + high variance
+            float drop = last_distance - current_distance;
+            float threshold = id(auto_refill_drop_threshold).state;
+            bool outside_regen = !id(regen_active);
+
+            if (drop >= threshold && outside_regen && std_dev >= 0.5) {
+              ESP_LOGI("refill", "Auto-refill detected! Drop: %.1fcm, variance: %.2f", drop, std_dev);
+
+              // Reset W learning
+              id(baseline_history).clear();
+              id(baseline_timestamps).clear();
+              id(w_learning_status) = 0;
+
+              // Flash LED 3 times (non-blocking)
+              id(flash_led_refill)->execute();
+            }
+          }
+
+          last_distance = current_distance;
 
   # Normal update interval check
   - interval: 1s
