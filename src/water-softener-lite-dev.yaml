@@ -1,10 +1,10 @@
 # Water Softener Monitor - ATOM Lite Dev Config
 # For testing/development with M5Stack ATOM Lite
-# Uses GitHub package refs to test full adoption workflow
+# Uses local includes for fast iteration
 
 substitutions:
   name: "water-softener-monitor-lite-dev"
-  version: "1.4.1-dev"
+  version: "1.7.0-dev"
 
 esphome:
   name: "${name}"
@@ -20,9 +20,9 @@ dashboard_import:
   package_import_url: github://rmaher001/water-softener-monitor/src/water-softener-lite-webinstall.yaml@master
   import_full_config: false
 
-# Include the Lite core package from GitHub (tests package import)
+# Include the Lite core package locally for fast development
 packages:
-  water_softener: github://rmaher001/water-softener-monitor/src/water-softener-lite-core.yaml@master
+  water_softener: !include water-softener-lite-core.yaml
 
 # API for Home Assistant integration
 api:
