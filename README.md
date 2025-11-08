@@ -10,7 +10,7 @@ Monitor your water softener salt level from Home Assistant. A distance sensor me
 - **M5Stack ATOM Lite** (ESP32-PICO-D4) - ESP-IDF framework, web server enabled
   - [Official M5Stack Store](https://shop.m5stack.com/products/atom-lite-esp32-development-kit)
   - Also available at Mouser, DigiKey, Adafruit
-- **M5Stack ATOM S3 Lite** (ESP32-S3) - Arduino framework, web server disabled
+- **M5Stack ATOM S3 Lite** (ESP32-S3) - ESP-IDF framework, web server enabled
   - [Official M5Stack Store](https://shop.m5stack.com/products/atoms3-lite-esp32s3-dev-kit)
   - Also available at Mouser, DigiKey, Adafruit
 
@@ -91,7 +91,7 @@ All parameters adjustable in Home Assistant (no reflashing needed):
 - **Update Interval**: How often to poll the sensor (1-300 seconds)
 - **Thresholds**: Full, Good, Low, Critical alert levels (percentages)
 
-**Note**: ATOM Lite also includes a web interface at http://water-softener-monitor-lite.local for standalone configuration.
+**Note**: Both ATOM Lite and S3 include a web interface at http://water-softener-monitor.local (with MAC suffix) for standalone configuration.
 
 ## Status Levels
 
@@ -103,7 +103,7 @@ All parameters adjustable in Home Assistant (no reflashing needed):
 ## Integration
 
 - **Home Assistant**: Auto-discovery with ESPHome integration (no API key required after adoption)
-- **Web Interface**: Available on ATOM Lite only (http://water-softener-monitor-lite.local)
+- **Web Interface**: Available on both ATOM Lite and S3 (http://water-softener-monitor.local with MAC suffix)
 - **OTA Updates**: Supported through ESPHome Dashboard (no password required after adoption)
 - **Bluetooth**: Improv BLE for easy WiFi configuration
 
@@ -111,7 +111,7 @@ All parameters adjustable in Home Assistant (no reflashing needed):
 
 **Core Packages:**
 - `src/water-softener-lite-core.yaml` - ATOM Lite core functionality (ESP-IDF, web server)
-- `src/water-softener-s3-core.yaml` - ATOM S3 core functionality (Arduino, no web server)
+- `src/water-softener-s3-core.yaml` - ATOM S3 core functionality (ESP-IDF, web server)
 
 **Web Installer Configs:**
 - `src/water-softener-lite-webinstall.yaml` - ATOM Lite web installer

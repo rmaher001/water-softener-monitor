@@ -472,16 +472,43 @@ Does the ToF approach work if salt is submerged? Depends on water level behavior
 
 ## Development Commands
 
+**CRITICAL: NEVER flash/upload firmware without explicit user approval**
+
+**ABSOLUTELY FORBIDDEN without user approval:**
+- `esphome upload` (network or USB)
+- `esphome run` (compiles + uploads automatically)
+- Any serial flashing commands
+- Any OTA update operations
+- ANY method that deploys firmware to physical hardware
+
+**Why this is critical:**
+- Cannot verify which device is physically connected (USB)
+- Cannot verify device state (in use, running automations, production vs dev)
+- Network addresses may point to production devices users depend on
+- Wrong device could be bricked or have critical functionality disrupted
+- Firmware deployment is irreversible and affects physical hardware
+
+**Safe operations (no approval needed):**
+- `esphome compile` - Build firmware only
+- `esphome logs` - Read-only monitoring
+- File reads and code analysis
+
+**Required workflow:**
+1. Compile firmware
+2. Show compilation results to user
+3. Wait for explicit approval with device confirmation
+4. Only then proceed with upload/flash
+
 ```bash
 # ATOM Lite
-esphome compile src/water-softener-lite-dev.yaml
-esphome upload src/water-softener-lite-dev.yaml --device 192.168.86.32
-esphome logs src/water-softener-lite-dev.yaml --device 192.168.86.32
+esphome compile src/water-softener-lite-dev.yaml  # SAFE - compile only
+esphome upload src/water-softener-lite-dev.yaml --device 192.168.86.32  # FORBIDDEN without approval
+esphome logs src/water-softener-lite-dev.yaml --device 192.168.86.32  # SAFE - read only
 
 # ATOM S3
-esphome compile src/water-softener-s3-dev.yaml
-esphome upload src/water-softener-s3-dev.yaml --device 192.168.86.104
-esphome logs src/water-softener-s3-dev.yaml --device 192.168.86.104
+esphome compile src/water-softener-s3-dev.yaml  # SAFE - compile only
+esphome upload src/water-softener-s3-dev.yaml --device 192.168.86.104  # FORBIDDEN without approval
+esphome logs src/water-softener-s3-dev.yaml --device 192.168.86.104  # SAFE - read only
 ```
 
 ## Release Workflow
