@@ -740,8 +740,8 @@ interval:
           float tank_height = id(tank_height_cm).state;
           float current_distance = id(salt_distance_raw).state;
 
-          // If tank is configured and W is not yet set, estimate it
-          if (tank_height >= 30.0 && id(waterline_w) == 0.0 && !isnan(current_distance)) {
+          // If tank is configured and learning status is waiting (0), estimate W
+          if (tank_height >= 30.0 && id(w_learning_status) == 0 && !isnan(current_distance)) {
             float estimated_w = tank_height - current_distance;
             if (estimated_w > 0 && estimated_w < tank_height) {
               id(waterline_w) = estimated_w;
