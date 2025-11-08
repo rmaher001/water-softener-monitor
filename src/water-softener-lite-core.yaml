@@ -745,6 +745,7 @@ interval:
             float estimated_w = tank_height - current_distance;
             if (estimated_w > 0 && estimated_w < tank_height) {
               id(waterline_w) = estimated_w;
+              id(waterline_w_sensor)->publish_state(estimated_w);
               ESP_LOGI("w_learn", "Initial W estimated: %.1fcm (tank=%.1f, distance=%.1f)",
                        estimated_w, tank_height, current_distance);
             }
