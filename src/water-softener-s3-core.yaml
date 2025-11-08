@@ -149,7 +149,7 @@ number:
     entity_category: "config"
     optimistic: true
     restore_value: true
-    initial_value: 100
+    initial_value: 0
     min_value: 30
     max_value: 150
     step: 1
@@ -556,8 +556,7 @@ binary_sensor:
   - platform: template
     name: "Salt Refill Detected"
     id: salt_refill_detected
-    icon: "mdi:bag-personal"
-    device_class: presence
+    icon: "mdi:basket-fill"
     lambda: |-
       // Auto-refill detection logic placeholder
       // Will be implemented in button handler
@@ -612,7 +611,6 @@ binary_sensor:
     name: "High Waterline Advisory"
     id: high_waterline_advisory
     icon: "mdi:information"
-    device_class: problem
     lambda: |-
       float w = id(waterline_w);
       // If W < 50cm, water is in top half of tank (potentially too high)
@@ -709,13 +707,20 @@ text_sensor:
     icon: "mdi:school"
     entity_category: "diagnostic"
     lambda: |-
+      float tank_height = id(tank_height_cm).state;
+
+      // Check configuration
+      if (tank_height < 30.0) {
+        return {"not_configured"};
+      }
+
       int status = id(w_learning_status);
       if (status == 0) {
-        return {"Learning - Waiting for first regeneration"};
+        return {"estimating"};
       } else if (status == 1) {
-        return {"Learning - Refining (" + to_string(id(baseline_history).size()) + " cycles)"};
+        return {"learning"};
       } else {
-        return {"Learned"};
+        return {"learned"};
       }
 
   - platform: template
@@ -748,12 +753,25 @@ interval:
   - interval: 5s
     then:
       - lambda: |-
+          // W Learning: Initial estimation if not configured
+          float tank_height = id(tank_height_cm).state;
+          float current_distance = id(salt_distance_raw).state;
+
+          // If tank is configured and W is not yet set, estimate it
+          if (tank_height >= 30.0 && id(waterline_w) == 0.0 && !isnan(current_distance)) {
+            float estimated_w = tank_height - current_distance;
+            if (estimated_w > 0 && estimated_w < tank_height) {
+              id(waterline_w) = estimated_w;
+              ESP_LOGI("w_learn", "Initial W estimated: %.1fcm (tank=%.1f, distance=%.1f)",
+                       estimated_w, tank_height, current_distance);
+            }
+          }
+
           // W Learning: Collect baseline after regeneration ends
           static bool was_regen_active = false;
           static std::vector<float> stability_buffer;
           static unsigned long learning_start_time = 0;
 
-          float current_distance = id(salt_distance_raw).state;
           bool currently_in_regen = id(regen_active);
 
           // Detect regeneration just ended
