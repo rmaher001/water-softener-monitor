@@ -39,17 +39,6 @@ i2c:
   scl: GPIO32
   scan: true
 
-# RGB LED for status indication (ATOM Lite built-in)
-light:
-  - platform: esp32_rmt_led_strip
-    chipset: WS2812
-    pin: GPIO27
-    num_leds: 1
-    rgb_order: GRB
-    name: "Status LED"
-    id: status_led
-    internal: true
-
 # Global variables
 globals:
   - id: last_valid_status
@@ -90,7 +79,7 @@ number:
     entity_category: "config"
     optimistic: true
     restore_value: true
-    initial_value: 82
+    initial_value: 100
     min_value: 30
     max_value: 150
     step: 1
@@ -104,7 +93,7 @@ number:
     entity_category: "config"
     optimistic: true
     restore_value: true
-    initial_value: 35
+    initial_value: 43
     min_value: 10
     max_value: 120
     step: 1
@@ -139,6 +128,17 @@ switch:
 
 # Buttons
 button:
+  - platform: template
+    name: "Set Default Thresholds"
+    id: set_default_thresholds
+    icon: "mdi:auto-fix"
+    on_press:
+      - lambda: |-
+          float tank_height = id(tank_height_cm).state;
+          float new_threshold = tank_height * 0.43;
+          id(refill_threshold_cm).publish_state(new_threshold);
+          ESP_LOGI("config", "Default thresholds set: threshold=%.1fcm (43%% of %.0fcm tank height)", new_threshold, tank_height);
+
   - platform: restart
     name: "Restart"
     icon: "mdi:restart"
@@ -175,18 +175,6 @@ sensor:
 
 # Binary sensors
 binary_sensor:
-  # Setup button (ATOM Lite - GPIO39, no internal pullup available)
-  - platform: gpio
-    pin:
-      number: GPIO39
-      inverted: true
-    name: "Setup Button"
-    id: setup_button
-    internal: true
-    filters:
-      - delayed_on: 10ms
-      - delayed_off: 10ms
-
   - platform: template
     name: "Sensor Out of Range"
     id: sensor_out_of_range
@@ -208,6 +196,17 @@ binary_sensor:
     id: regen_cycle_active
     icon: "mdi:water-sync"
     lambda: |-
+      // Regeneration detection configuration constants
+      const float REGEN_RISE_SHORT_CM = 3.0;       // Rise threshold for short window (5 readings)
+      const float REGEN_RISE_LONG_CM = 5.0;        // Rise threshold for long window (10 readings)
+      const float REGEN_FALSE_ALARM_CM = 5.0;      // Minimum total rise to not be false alarm
+      const size_t REGEN_ROLLING_WINDOW_SIZE = 60; // Number of readings to keep in history
+      const unsigned long REGEN_TIMEOUT_MINUTES = 240;  // 4 hours max duration
+      const unsigned long REGEN_FALSE_ALARM_MINUTES = 60; // Time before false alarm check
+      const size_t REGEN_STABILITY_WINDOW_SIZE = 30;    // Readings needed for stability check
+      const float REGEN_STABILITY_VARIATION_CM = 2.0;   // Max variation for stability
+      const float REGEN_RECOVERY_THRESHOLD = 0.5;  // 50% recovery from baseline to end cycle
+
       float current_distance = id(salt_distance_raw).state;
       unsigned long current_time = millis();
 
@@ -223,7 +222,7 @@ binary_sensor:
         // (Faster detection at shorter update intervals, still works at longer intervals)
         if (id(recent_readings).size() >= 5) {
           float rise_5readings = current_distance - id(recent_readings)[id(recent_readings).size() - 5];
-          if (rise_5readings > 3.0) {
+          if (rise_5readings > REGEN_RISE_SHORT_CM) {
             start_detected = true;
             ESP_LOGD("regen", "Rise over 5 readings: %.1fcm", rise_5readings);
           }
@@ -232,7 +231,7 @@ binary_sensor:
         // Check for >5cm rise over last 10 readings (catches slower/gradual rises)
         if (!start_detected && id(recent_readings).size() >= 10) {
           float rise_10readings = current_distance - id(recent_readings)[id(recent_readings).size() - 10];
-          if (rise_10readings > 5.0) {
+          if (rise_10readings > REGEN_RISE_LONG_CM) {
             start_detected = true;
             ESP_LOGD("regen", "Rise over 10 readings: %.1fcm", rise_10readings);
           }
@@ -248,9 +247,9 @@ binary_sensor:
         }
       }
 
-      // Maintain rolling window of recent readings (keeps last 60 samples)
+      // Maintain rolling window of recent readings
       // Provides sufficient history for rise detection and stability checks
-      if (id(recent_readings).size() >= 60) {
+      if (id(recent_readings).size() >= REGEN_ROLLING_WINDOW_SIZE) {
         id(recent_readings).erase(id(recent_readings).begin());
       }
       id(recent_readings).push_back(current_distance);
@@ -262,15 +261,15 @@ binary_sensor:
         float current_rise = current_distance - id(regen_baseline);
 
         // Safety timeout: 4 hours
-        if (elapsed_minutes > 240) {
+        if (elapsed_minutes > REGEN_TIMEOUT_MINUTES) {
           ESP_LOGI("regen", "Regeneration ended - timeout after %lu minutes", elapsed_minutes);
           id(regen_active) = false;
           id(recent_readings).clear();
           return false;
         }
 
-        // False alarm reset: <5cm total rise after 1 hour
-        if (elapsed_minutes > 60 && id(drop_amount) < 5.0) {
+        // False alarm reset: Insufficient rise after prolonged time
+        if (elapsed_minutes > REGEN_FALSE_ALARM_MINUTES && id(drop_amount) < REGEN_FALSE_ALARM_CM) {
           ESP_LOGI("regen", "Regeneration ended - false alarm (only %.1fcm rise)", id(drop_amount));
           id(regen_active) = false;
           id(recent_readings).clear();
@@ -279,16 +278,16 @@ binary_sensor:
 
         // End condition: 50% recovery + stability check
         // Requires distance to recover halfway back to baseline AND remain stable
-        float recovery_target = id(regen_baseline) + (id(drop_amount) * 0.5);
+        float recovery_target = id(regen_baseline) + (id(drop_amount) * REGEN_RECOVERY_THRESHOLD);
         bool recovered = current_distance <= recovery_target;
 
-        // Check stability over last 30 readings (sufficient sample size across all update intervals)
-        if (recovered && id(recent_readings).size() >= 30) {
+        // Check stability over sufficient sample window
+        if (recovered && id(recent_readings).size() >= REGEN_STABILITY_WINDOW_SIZE) {
           float min_distance = *std::min_element(id(recent_readings).begin(), id(recent_readings).end());
           float max_distance = *std::max_element(id(recent_readings).begin(), id(recent_readings).end());
           float variation = max_distance - min_distance;
 
-          if (variation <= 2.0) {
+          if (variation <= REGEN_STABILITY_VARIATION_CM) {
             ESP_LOGI("regen", "Regeneration ended - recovered and stable after %lu minutes", elapsed_minutes);
             id(regen_active) = false;
             id(recent_readings).clear();
@@ -311,6 +310,9 @@ text_sensor:
     icon: "mdi:information-variant"
     update_interval: never
     lambda: |-
+      // Status hysteresis configuration
+      const float STATUS_HYSTERESIS_CM = 2.0;  // Dead zone to prevent status bouncing
+
       // Freeze status during regeneration cycle
       if (id(regen_active)) {
         return {id(last_valid_status)};
@@ -318,7 +320,6 @@ text_sensor:
 
       float distance = id(salt_distance_raw).state;
       float threshold = id(refill_threshold_cm).state;
-      const float HYSTERESIS = 2.0; // cm
 
       std::string new_status;
       std::string current_status = id(last_valid_status);
@@ -326,22 +327,31 @@ text_sensor:
       if (isnan(distance)) {
         new_status = "Checking...";
       } else {
+        // First boot: Initialize status directly without hysteresis
+        if (current_status == "Checking...") {
+          new_status = (distance >= threshold) ? "Refill" : "Good";
+        }
         // Apply hysteresis based on current status
-        if (current_status == "Good") {
+        else if (current_status == "Good") {
           // Need to exceed threshold + hysteresis to change to Refill
-          if (distance >= (threshold + HYSTERESIS)) {
+          if (distance >= (threshold + STATUS_HYSTERESIS_CM)) {
             new_status = "Refill";
           } else {
             new_status = "Good";
           }
         } else {
-          // Currently "Refill" or "Checking..." - need to drop below threshold - hysteresis for Good
-          if (distance < (threshold - HYSTERESIS)) {
+          // Currently "Refill" - need to drop below threshold - hysteresis for Good
+          if (distance < (threshold - STATUS_HYSTERESIS_CM)) {
             new_status = "Good";
           } else {
             new_status = "Refill";
           }
         }
+      }
+
+      // Log status changes
+      if (new_status != current_status) {
+        ESP_LOGI("status", "Status change: %s -> %s", current_status.c_str(), new_status.c_str());
       }
 
       id(last_valid_status) = new_status;
