@@ -219,21 +219,22 @@ binary_sensor:
       if (!id(regen_active)) {
         bool start_detected = false;
 
-        // Check for >3cm rise in 5 minutes (5 samples at 1min intervals)
+        // Check for >3cm rise over last 5 readings
+        // (Faster detection at shorter update intervals, still works at longer intervals)
         if (id(recent_readings).size() >= 5) {
-          float rise_5min = current_distance - id(recent_readings)[id(recent_readings).size() - 5];
-          if (rise_5min > 3.0) {
+          float rise_5readings = current_distance - id(recent_readings)[id(recent_readings).size() - 5];
+          if (rise_5readings > 3.0) {
             start_detected = true;
-            ESP_LOGD("regen", "5-min rise detected: %.1fcm", rise_5min);
+            ESP_LOGD("regen", "Rise over 5 readings: %.1fcm", rise_5readings);
           }
         }
 
-        // Check for >5cm rise in 10 minutes (10 samples)
+        // Check for >5cm rise over last 10 readings (catches slower/gradual rises)
         if (!start_detected && id(recent_readings).size() >= 10) {
-          float rise_10min = current_distance - id(recent_readings)[id(recent_readings).size() - 10];
-          if (rise_10min > 5.0) {
+          float rise_10readings = current_distance - id(recent_readings)[id(recent_readings).size() - 10];
+          if (rise_10readings > 5.0) {
             start_detected = true;
-            ESP_LOGD("regen", "10-min rise detected: %.1fcm", rise_10min);
+            ESP_LOGD("regen", "Rise over 10 readings: %.1fcm", rise_10readings);
           }
         }
 
@@ -247,8 +248,9 @@ binary_sensor:
         }
       }
 
-      // Maintain rolling window (30 minutes at 1min intervals)
-      if (id(recent_readings).size() >= 30) {
+      // Maintain rolling window of recent readings (keeps last 60 samples)
+      // Provides sufficient history for rise detection and stability checks
+      if (id(recent_readings).size() >= 60) {
         id(recent_readings).erase(id(recent_readings).begin());
       }
       id(recent_readings).push_back(current_distance);
@@ -275,10 +277,12 @@ binary_sensor:
           return false;
         }
 
-        // End condition: 50% recovery + stability
+        // End condition: 50% recovery + stability check
+        // Requires distance to recover halfway back to baseline AND remain stable
         float recovery_target = id(regen_baseline) + (id(drop_amount) * 0.5);
         bool recovered = current_distance <= recovery_target;
 
+        // Check stability over last 30 readings (sufficient sample size across all update intervals)
         if (recovered && id(recent_readings).size() >= 30) {
           float min_distance = *std::min_element(id(recent_readings).begin(), id(recent_readings).end());
           float max_distance = *std::max_element(id(recent_readings).begin(), id(recent_readings).end());
