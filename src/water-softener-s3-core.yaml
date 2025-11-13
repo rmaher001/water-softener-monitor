@@ -277,23 +277,39 @@ binary_sensor:
           return false;
         }
 
-        // End condition: 50% recovery + stability check
-        // Requires distance to recover halfway back to baseline AND remain stable
-        float recovery_target = id(regen_baseline) + (id(drop_amount) * REGEN_RECOVERY_THRESHOLD);
-        bool recovered = current_distance <= recovery_target;
+        // End condition: Two possible patterns
+        // Pattern 1 (poorly maintained): Distance rises then recovers back down
+        // Pattern 2 (well-maintained): Distance rises and stays at new level
 
-        // Check stability over sufficient sample window
-        if (recovered && id(recent_readings).size() >= REGEN_STABILITY_WINDOW_SIZE) {
+        bool end_cycle = false;
+
+        if (id(recent_readings).size() >= REGEN_STABILITY_WINDOW_SIZE) {
           float min_distance = *std::min_element(id(recent_readings).begin(), id(recent_readings).end());
           float max_distance = *std::max_element(id(recent_readings).begin(), id(recent_readings).end());
           float variation = max_distance - min_distance;
+          bool is_stable = variation <= REGEN_STABILITY_VARIATION_CM;
 
-          if (variation <= REGEN_STABILITY_VARIATION_CM) {
-            ESP_LOGI("regen", "Regeneration ended - recovered and stable after %lu minutes", elapsed_minutes);
-            id(regen_active) = false;
-            id(recent_readings).clear();
-            return false;
+          if (is_stable) {
+            // Check if distance recovered back down (poorly maintained pattern)
+            float recovery_target = id(regen_baseline) + (id(drop_amount) * REGEN_RECOVERY_THRESHOLD);
+            bool recovered = current_distance <= recovery_target;
+
+            if (recovered) {
+              ESP_LOGI("regen", "Regeneration ended - recovered and stable after %lu minutes", elapsed_minutes);
+              end_cycle = true;
+            } else {
+              // Distance is stable but hasn't recovered = well-maintained pattern
+              // Distance rose and stayed at new level
+              ESP_LOGI("regen", "Regeneration ended - stable at new level after %lu minutes", elapsed_minutes);
+              end_cycle = true;
+            }
           }
+        }
+
+        if (end_cycle) {
+          id(regen_active) = false;
+          id(recent_readings).clear();
+          return false;
         }
 
         if (current_rise > id(drop_amount)) {

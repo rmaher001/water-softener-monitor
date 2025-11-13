@@ -140,13 +140,29 @@ The "recovery" in sensor readings is **not salt regenerating** - it's the brine 
 
 ### Binary Sensor: "Regeneration Cycle Active"
 
-**Automatic detection of water softener regeneration cycles using salt level patterns.**
+**Automatic detection of water softener regeneration cycles - works in both well-maintained and poorly maintained tanks.**
 
 **Detection Logic:**
-- **START**: >3% drop in 5 minutes OR >5% drop in 10 minutes
-- **END**: 50% recovery from drop + stability (±2% for 30 minutes)
+- **START**: >3cm rise in distance over 5 readings OR >5cm rise over 10 readings
+- **END**: Stability achieved (±2cm variation for 30 readings), then:
+  - Well-maintained: Distance stable at new higher level
+  - Poorly maintained: Distance recovered back to baseline level
 - **Safety timeout**: 4 hours maximum
-- **False alarm reset**: Auto-clear if <5% total drop after 1 hour
+- **False alarm reset**: Auto-clear if <5cm total rise after 1 hour
+
+**Two Operating Scenarios:**
+
+1. **Well-Maintained Tank (salt above water)**
+   - ToF measures dry salt surface
+   - During regen: distance increases as salt dissolves/settles
+   - After regen: distance stays at new higher level
+   - Detection ends when stable at new level
+
+2. **Poorly Maintained Tank (salt submerged)**
+   - ToF measures water surface
+   - During regen: distance increases as water pumps out
+   - After regen: distance decreases back down as water refills
+   - Detection ends when recovered and stable
 
 **Metrics Available in Home Assistant:**
 - Binary sensor state (ON/OFF) with timestamps
