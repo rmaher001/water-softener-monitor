@@ -1,7 +1,7 @@
-# ESPHome Water Softener Salt Monitor - Simplified v0.3
+# ESPHome Water Softener Salt Monitor - v0.4.0
 # GitHub: https://github.com/rmaher001/water-softener-monitor
 #
-# Simple distance-based monitoring with basic Good/Refill status
+# Simple distance-based monitoring with derivative-based regeneration detection
 # All advanced analytics handled in Home Assistant
 
 esp32:
@@ -47,30 +47,36 @@ globals:
     restore_value: yes
     initial_value: '"Checking..."'
 
-  # Regeneration detection tracking
+  # Derivative-based regeneration detection tracking
   - id: regen_active
     type: bool
     restore_value: no
     initial_value: 'false'
-
-  - id: regen_baseline
-    type: float
-    restore_value: no
-    initial_value: '0.0'
 
   - id: regen_start_time
     type: unsigned long
     restore_value: no
     initial_value: '0'
 
-  - id: drop_amount
-    type: float
-    restore_value: no
-    initial_value: '0.0'
-
+  # Store recent readings with timestamps for derivative calculation
   - id: recent_readings
     type: std::vector<float>
     restore_value: no
+
+  - id: recent_timestamps
+    type: std::vector<unsigned long>
+    restore_value: no
+
+  # Derivative tracking for start/end detection
+  - id: rise_counter
+    type: int
+    restore_value: no
+    initial_value: '0'
+
+  - id: stable_counter
+    type: int
+    restore_value: no
+    initial_value: '0'
 
 # Configurable settings
 number:
@@ -113,6 +119,48 @@ number:
     max_value: 300
     step: 30
     unit_of_measurement: "s"
+    icon: "mdi:timer-outline"
+    mode: box
+
+  - platform: template
+    name: "Regen Detection Rise Threshold"
+    id: regen_rise_threshold
+    entity_category: "config"
+    optimistic: true
+    restore_value: true
+    initial_value: 0.03
+    min_value: 0.01
+    max_value: 0.20
+    step: 0.01
+    unit_of_measurement: "cm/min"
+    icon: "mdi:chart-line-variant"
+    mode: box
+
+  - platform: template
+    name: "Regen Detection Stable Threshold"
+    id: regen_stable_threshold
+    entity_category: "config"
+    optimistic: true
+    restore_value: true
+    initial_value: 0.015
+    min_value: 0.005
+    max_value: 0.10
+    step: 0.005
+    unit_of_measurement: "cm/min"
+    icon: "mdi:chart-line"
+    mode: box
+
+  - platform: template
+    name: "Regen Minimum Duration"
+    id: regen_min_duration
+    entity_category: "config"
+    optimistic: true
+    restore_value: true
+    initial_value: 10
+    min_value: 1
+    max_value: 30
+    step: 1
+    unit_of_measurement: "min"
     icon: "mdi:timer-outline"
     mode: box
 
@@ -197,123 +245,124 @@ binary_sensor:
     id: regen_cycle_active
     icon: "mdi:water-sync"
     lambda: |-
-      // Regeneration detection configuration constants
-      const float REGEN_RISE_SHORT_CM = 3.0;       // Rise threshold for short window (5 readings)
-      const float REGEN_RISE_LONG_CM = 5.0;        // Rise threshold for long window (10 readings)
-      const float REGEN_FALSE_ALARM_CM = 5.0;      // Minimum total rise to not be false alarm
-      const size_t REGEN_ROLLING_WINDOW_SIZE = 60; // Number of readings to keep in history
-      const unsigned long REGEN_TIMEOUT_MINUTES = 240;  // 4 hours max duration
-      const unsigned long REGEN_FALSE_ALARM_MINUTES = 60; // Time before false alarm check
-      const size_t REGEN_STABILITY_WINDOW_SIZE = 30;    // Readings needed for stability check
-      const float REGEN_STABILITY_VARIATION_CM = 2.0;   // Max variation for stability
-      const float REGEN_RECOVERY_THRESHOLD = 0.5;  // 50% recovery from baseline to end cycle
+      // Derivative-based regeneration detection
+      // Detects sustained rate of change (derivative) rather than absolute thresholds
+      const unsigned long REGEN_TIMEOUT_MINUTES = 240;  // 4 hours max duration (safety)
+      const size_t DERIVATIVE_WINDOW_SIZE = 15;          // Keep last 15 readings for derivative calc
+      const size_t DERIVATIVE_START_CONFIRM = 3;         // Confirm rise over 3 consecutive derivatives
+      const size_t DERIVATIVE_END_CONFIRM = 10;          // Confirm stable over 10 consecutive derivatives
 
       float current_distance = id(salt_distance_raw).state;
       unsigned long current_time = millis();
 
+      // Skip processing if sensor reading is invalid
       if (isnan(current_distance)) {
         return id(regen_active);
       }
 
-      // === START DETECTION ===
-      if (!id(regen_active)) {
-        bool start_detected = false;
+      // Get configurable thresholds from UI
+      float rise_threshold = id(regen_rise_threshold).state;      // cm/min
+      float stable_threshold = id(regen_stable_threshold).state;  // cm/min
+      unsigned long min_duration_ms = (unsigned long)(id(regen_min_duration).state * 60000);  // Convert min to ms
 
-        // Check for >3cm rise over last 5 readings
-        // (Faster detection at shorter update intervals, still works at longer intervals)
-        if (id(recent_readings).size() >= 5) {
-          float rise_5readings = current_distance - id(recent_readings)[id(recent_readings).size() - 5];
-          if (rise_5readings > REGEN_RISE_SHORT_CM) {
-            start_detected = true;
-            ESP_LOGD("regen", "Rise over 5 readings: %.1fcm", rise_5readings);
-          }
-        }
-
-        // Check for >5cm rise over last 10 readings (catches slower/gradual rises)
-        if (!start_detected && id(recent_readings).size() >= 10) {
-          float rise_10readings = current_distance - id(recent_readings)[id(recent_readings).size() - 10];
-          if (rise_10readings > REGEN_RISE_LONG_CM) {
-            start_detected = true;
-            ESP_LOGD("regen", "Rise over 10 readings: %.1fcm", rise_10readings);
-          }
-        }
-
-        if (start_detected) {
-          id(regen_active) = true;
-          id(regen_baseline) = id(recent_readings).front();
-          id(regen_start_time) = current_time;
-          id(drop_amount) = current_distance - id(regen_baseline);
-          ESP_LOGI("regen", "Regeneration started - baseline: %.1fcm, rise: %.1fcm",
-                   id(regen_baseline), id(drop_amount));
-        }
-      }
-
-      // Maintain rolling window of recent readings
-      // Provides sufficient history for rise detection and stability checks
-      if (id(recent_readings).size() >= REGEN_ROLLING_WINDOW_SIZE) {
+      // Maintain rolling window of readings and timestamps
+      if (id(recent_readings).size() >= DERIVATIVE_WINDOW_SIZE) {
         id(recent_readings).erase(id(recent_readings).begin());
+        id(recent_timestamps).erase(id(recent_timestamps).begin());
       }
       id(recent_readings).push_back(current_distance);
+      id(recent_timestamps).push_back(current_time);
+
+      // Need at least 2 readings to calculate derivative
+      if (id(recent_readings).size() < 2) {
+        return id(regen_active);
+      }
+
+      // Calculate derivative (rate of change in cm/min)
+      size_t n = id(recent_readings).size();
+      float distance_delta = id(recent_readings)[n-1] - id(recent_readings)[n-2];
+      unsigned long time_delta_ms = id(recent_timestamps)[n-1] - id(recent_timestamps)[n-2];
+      float time_delta_min = time_delta_ms / 60000.0;  // Convert ms to minutes
+      float derivative = (time_delta_min > 0) ? (distance_delta / time_delta_min) : 0;
+
+      // === START DETECTION ===
+      if (!id(regen_active)) {
+        // Check if derivative indicates sustained rise
+        if (derivative > rise_threshold) {
+          id(rise_counter) = id(rise_counter) + 1;
+          id(stable_counter) = 0;  // Reset stable counter
+        } else {
+          id(rise_counter) = 0;  // Reset rise counter if derivative drops
+        }
+
+        // Start detection if sustained rise confirmed
+        if (id(rise_counter) >= DERIVATIVE_START_CONFIRM) {
+          id(regen_active) = true;
+          id(regen_start_time) = current_time;
+          id(rise_counter) = 0;
+          id(stable_counter) = 0;
+          ESP_LOGI("regen", "Regeneration started - derivative: %.3f cm/min (threshold: %.3f)",
+                   derivative, rise_threshold);
+        }
+      }
 
       // === END DETECTION ===
       if (id(regen_active)) {
-        unsigned long elapsed_seconds = (current_time - id(regen_start_time)) / 1000;
-        unsigned long elapsed_minutes = elapsed_seconds / 60;
-        float current_rise = current_distance - id(regen_baseline);
+        unsigned long elapsed_ms = current_time - id(regen_start_time);
+        unsigned long elapsed_min = elapsed_ms / 60000;
 
-        // Safety timeout: 4 hours
-        if (elapsed_minutes > REGEN_TIMEOUT_MINUTES) {
-          ESP_LOGI("regen", "Regeneration ended - timeout after %lu minutes", elapsed_minutes);
+        // Safety timeout: 4 hours maximum
+        if (elapsed_min > REGEN_TIMEOUT_MINUTES) {
+          ESP_LOGI("regen", "Regeneration ended - timeout after %lu minutes", elapsed_min);
           id(regen_active) = false;
+          id(rise_counter) = 0;
+          id(stable_counter) = 0;
           id(recent_readings).clear();
+          id(recent_timestamps).clear();
           return false;
         }
 
-        // False alarm reset: Insufficient rise after prolonged time
-        if (elapsed_minutes > REGEN_FALSE_ALARM_MINUTES && id(drop_amount) < REGEN_FALSE_ALARM_CM) {
-          ESP_LOGI("regen", "Regeneration ended - false alarm (only %.1fcm rise)", id(drop_amount));
-          id(regen_active) = false;
-          id(recent_readings).clear();
-          return false;
-        }
+        // False alarm: Cycle ended too quickly (noise/spike)
+        if (elapsed_ms < min_duration_ms) {
+          // Check if derivative indicates stable (near-zero rate of change)
+          if (abs(derivative) < stable_threshold) {
+            id(stable_counter) = id(stable_counter) + 1;
+          } else {
+            id(stable_counter) = 0;
+          }
 
-        // End condition: Two possible patterns
-        // Pattern 1 (poorly maintained): Distance rises then recovers back down
-        // Pattern 2 (well-maintained): Distance rises and stays at new level
-
-        bool end_cycle = false;
-
-        if (id(recent_readings).size() >= REGEN_STABILITY_WINDOW_SIZE) {
-          float min_distance = *std::min_element(id(recent_readings).begin(), id(recent_readings).end());
-          float max_distance = *std::max_element(id(recent_readings).begin(), id(recent_readings).end());
-          float variation = max_distance - min_distance;
-          bool is_stable = variation <= REGEN_STABILITY_VARIATION_CM;
-
-          if (is_stable) {
-            // Check if distance recovered back down (poorly maintained pattern)
-            float recovery_target = id(regen_baseline) + (id(drop_amount) * REGEN_RECOVERY_THRESHOLD);
-            bool recovered = current_distance <= recovery_target;
-
-            if (recovered) {
-              ESP_LOGI("regen", "Regeneration ended - recovered and stable after %lu minutes", elapsed_minutes);
-              end_cycle = true;
-            } else {
-              // Distance is stable but hasn't recovered = well-maintained pattern
-              // Distance rose and stayed at new level
-              ESP_LOGI("regen", "Regeneration ended - stable at new level after %lu minutes", elapsed_minutes);
-              end_cycle = true;
-            }
+          // If stable too early, it was likely a false alarm
+          if (id(stable_counter) >= DERIVATIVE_END_CONFIRM) {
+            ESP_LOGI("regen", "Regeneration ended - false alarm (duration: %lu ms < %lu ms minimum)",
+                     elapsed_ms, min_duration_ms);
+            id(regen_active) = false;
+            id(rise_counter) = 0;
+            id(stable_counter) = 0;
+            id(recent_readings).clear();
+            id(recent_timestamps).clear();
+            return false;
           }
         }
+        // Normal end detection: sustained stable derivative
+        else {
+          // Check if derivative indicates stable (near-zero rate of change)
+          if (abs(derivative) < stable_threshold) {
+            id(stable_counter) = id(stable_counter) + 1;
+            id(rise_counter) = 0;
+          } else {
+            id(stable_counter) = 0;
+          }
 
-        if (end_cycle) {
-          id(regen_active) = false;
-          id(recent_readings).clear();
-          return false;
-        }
-
-        if (current_rise > id(drop_amount)) {
-          id(drop_amount) = current_rise;
+          // End detection if sustained stability confirmed
+          if (id(stable_counter) >= DERIVATIVE_END_CONFIRM) {
+            ESP_LOGI("regen", "Regeneration ended - stable derivative after %lu minutes", elapsed_min);
+            id(regen_active) = false;
+            id(rise_counter) = 0;
+            id(stable_counter) = 0;
+            id(recent_readings).clear();
+            id(recent_timestamps).clear();
+            return false;
+          }
         }
       }
 
