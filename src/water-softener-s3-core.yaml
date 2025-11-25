@@ -1,4 +1,4 @@
-# ESPHome Water Softener Salt Monitor - v0.4.0
+# ESPHome Water Softener Salt Monitor - v0.4.1
 # GitHub: https://github.com/rmaher001/water-softener-monitor
 #
 # Simple distance-based monitoring with derivative-based regeneration detection
@@ -142,7 +142,7 @@ number:
     entity_category: "config"
     optimistic: true
     restore_value: true
-    initial_value: 0.015
+    initial_value: 0.02
     min_value: 0.005
     max_value: 0.10
     step: 0.005
@@ -245,7 +245,7 @@ binary_sensor:
     id: regen_cycle_active
     icon: "mdi:water-sync"
     lambda: |-
-      // Derivative-based regeneration detection
+      // Derivative-based regeneration detection v0.4.1
       // Detects sustained rate of change (derivative) rather than absolute thresholds
       const unsigned long REGEN_TIMEOUT_MINUTES = 240;  // 4 hours max duration (safety)
       const size_t DERIVATIVE_WINDOW_SIZE = 15;          // Keep last 15 readings for derivative calc
@@ -260,10 +260,37 @@ binary_sensor:
         return id(regen_active);
       }
 
+      // Skip regeneration detection during fast polling (calibration mode)
+      if (id(fast_polling_mode).state) {
+        return id(regen_active);
+      }
+
       // Get configurable thresholds from UI
       float rise_threshold = id(regen_rise_threshold).state;      // cm/min
       float stable_threshold = id(regen_stable_threshold).state;  // cm/min
       unsigned long min_duration_ms = (unsigned long)(id(regen_min_duration).state * 60000);  // Convert min to ms
+
+      // Validate configuration parameters
+      if (stable_threshold >= rise_threshold) {
+        ESP_LOGW("regen", "Invalid config: stable_threshold (%.3f) >= rise_threshold (%.3f). Detection disabled.",
+                 stable_threshold, rise_threshold);
+        return id(regen_active);
+      }
+
+      // Detect significant update interval changes and clear history
+      static unsigned long last_reading_time = 0;
+      if (last_reading_time > 0) {
+        unsigned long current_interval = current_time - last_reading_time;
+        unsigned long expected_interval = (unsigned long)(id(update_interval_seconds).state * 1000);
+
+        // If interval changed by more than 50%, clear history to prevent invalid derivatives
+        if (current_interval > expected_interval * 3 / 2 || current_interval < expected_interval * 2 / 3) {
+          ESP_LOGI("regen", "Update interval changed significantly (%lu ms), clearing derivative history", current_interval);
+          id(recent_readings).clear();
+          id(recent_timestamps).clear();
+        }
+      }
+      last_reading_time = current_time;
 
       // Maintain rolling window of readings and timestamps
       if (id(recent_readings).size() >= DERIVATIVE_WINDOW_SIZE) {
@@ -278,12 +305,30 @@ binary_sensor:
         return id(regen_active);
       }
 
-      // Calculate derivative (rate of change in cm/min)
+      // Calculate derivative (rate of change in cm/min) with overflow-safe time delta
       size_t n = id(recent_readings).size();
       float distance_delta = id(recent_readings)[n-1] - id(recent_readings)[n-2];
-      unsigned long time_delta_ms = id(recent_timestamps)[n-1] - id(recent_timestamps)[n-2];
+
+      // Handle millis() overflow (every 49.7 days)
+      unsigned long time_delta_ms;
+      if (id(recent_timestamps)[n-1] >= id(recent_timestamps)[n-2]) {
+        // Normal case: no overflow
+        time_delta_ms = id(recent_timestamps)[n-1] - id(recent_timestamps)[n-2];
+      } else {
+        // Overflow occurred: calculate wraparound distance
+        time_delta_ms = (ULONG_MAX - id(recent_timestamps)[n-2]) + id(recent_timestamps)[n-1] + 1;
+      }
+
       float time_delta_min = time_delta_ms / 60000.0;  // Convert ms to minutes
-      float derivative = (time_delta_min > 0) ? (distance_delta / time_delta_min) : 0;
+
+      // Calculate derivative with safety checks
+      float derivative;
+      if (time_delta_min > 0) {
+        derivative = distance_delta / time_delta_min;
+      } else {
+        ESP_LOGW("regen", "Zero time delta detected - duplicate timestamps?");
+        derivative = 0;
+      }
 
       // === START DETECTION ===
       if (!id(regen_active)) {
@@ -308,8 +353,23 @@ binary_sensor:
 
       // === END DETECTION ===
       if (id(regen_active)) {
-        unsigned long elapsed_ms = current_time - id(regen_start_time);
+        // Calculate elapsed time with overflow handling
+        unsigned long elapsed_ms;
+        if (current_time >= id(regen_start_time)) {
+          elapsed_ms = current_time - id(regen_start_time);
+        } else {
+          // Overflow occurred during regeneration
+          elapsed_ms = (ULONG_MAX - id(regen_start_time)) + current_time + 1;
+        }
         unsigned long elapsed_min = elapsed_ms / 60000;
+
+        // Diagnostic logging every 5 minutes during active regeneration
+        static unsigned long last_log_time = 0;
+        if (current_time - last_log_time > 300000 || last_log_time == 0) {
+          ESP_LOGD("regen", "Active: %lu min elapsed, derivative=%.3f cm/min, stable_counter=%d",
+                   elapsed_min, derivative, id(stable_counter));
+          last_log_time = current_time;
+        }
 
         // Safety timeout: 4 hours maximum
         if (elapsed_min > REGEN_TIMEOUT_MINUTES) {
@@ -351,6 +411,7 @@ binary_sensor:
             id(rise_counter) = 0;
           } else {
             id(stable_counter) = 0;
+            id(rise_counter) = 0;  // Reset both counters when not stable
           }
 
           // End detection if sustained stability confirmed
