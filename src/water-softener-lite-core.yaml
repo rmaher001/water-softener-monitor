@@ -127,9 +127,9 @@ number:
     entity_category: "config"
     optimistic: true
     restore_value: true
-    initial_value: 0.03
+    initial_value: 0.15
     min_value: 0.01
-    max_value: 0.20
+    max_value: 0.50
     step: 0.01
     unit_of_measurement: "cm/min"
     icon: "mdi:chart-line-variant"
@@ -491,6 +491,7 @@ text_sensor:
   - platform: template
     name: "Firmware Version"
     icon: "mdi:chip"
+    update_interval: never
     lambda: |-
       return {"${version}"};
 
