@@ -1,4 +1,4 @@
-# ESPHome Water Softener Salt Monitor - v0.4.1 (ATOM Lite)
+# ESPHome Water Softener Salt Monitor - v0.4.2 (ATOM Lite)
 # GitHub: https://github.com/rmaher001/water-softener-monitor
 #
 # Simple distance-based monitoring with derivative-based regeneration detection
@@ -173,6 +173,12 @@ switch:
     on_turn_on:
       - delay: 300s  # Auto-disable after 5 minutes
       - switch.turn_off: fast_polling_mode
+    on_turn_off:
+      - lambda: |-
+          // Clear derivative history when exiting fast polling to prevent false interval change warnings
+          id(recent_readings).clear();
+          id(recent_timestamps).clear();
+          ESP_LOGI("regen", "Fast polling disabled - derivative history cleared");
 
 # Buttons
 button:
@@ -251,16 +257,16 @@ binary_sensor:
       const size_t DERIVATIVE_START_CONFIRM = 3;         // Confirm rise over 3 consecutive derivatives
       const size_t DERIVATIVE_END_CONFIRM = 10;          // Confirm stable over 10 consecutive derivatives
 
+      // Skip regeneration detection during fast polling (calibration mode)
+      if (id(fast_polling_mode).state) {
+        return id(regen_active);
+      }
+
       float current_distance = id(salt_distance_raw).state;
       unsigned long current_time = millis();
 
       // Skip processing if sensor reading is invalid
       if (isnan(current_distance)) {
-        return id(regen_active);
-      }
-
-      // Skip regeneration detection during fast polling (calibration mode)
-      if (id(fast_polling_mode).state) {
         return id(regen_active);
       }
 
@@ -275,21 +281,6 @@ binary_sensor:
                  stable_threshold, rise_threshold);
         return id(regen_active);
       }
-
-      // Detect significant update interval changes and clear history
-      static unsigned long last_reading_time = 0;
-      if (last_reading_time > 0) {
-        unsigned long current_interval = current_time - last_reading_time;
-        unsigned long expected_interval = (unsigned long)(id(update_interval_seconds).state * 1000);
-
-        // If interval changed by more than 50%, clear history to prevent invalid derivatives
-        if (current_interval > expected_interval * 3 / 2 || current_interval < expected_interval * 2 / 3) {
-          ESP_LOGI("regen", "Update interval changed significantly (%lu ms), clearing derivative history", current_interval);
-          id(recent_readings).clear();
-          id(recent_timestamps).clear();
-        }
-      }
-      last_reading_time = current_time;
 
       // Maintain rolling window of readings and timestamps
       if (id(recent_readings).size() >= DERIVATIVE_WINDOW_SIZE) {
