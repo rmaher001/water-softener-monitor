@@ -1,4 +1,4 @@
-# ESPHome Water Softener Salt Monitor - v0.4.2 (ATOM Lite)
+# ESPHome Water Softener Salt Monitor - v0.4.3 (ATOM Lite)
 # GitHub: https://github.com/rmaher001/water-softener-monitor
 #
 # Simple distance-based monitoring with derivative-based regeneration detection
@@ -282,13 +282,29 @@ binary_sensor:
         return id(regen_active);
       }
 
-      // Maintain rolling window of readings and timestamps
-      if (id(recent_readings).size() >= DERIVATIVE_WINDOW_SIZE) {
-        id(recent_readings).erase(id(recent_readings).begin());
-        id(recent_timestamps).erase(id(recent_timestamps).begin());
+      // Only add new readings if the distance has actually changed
+      // This prevents duplicate timestamps when lambda is called multiple times with same sensor value
+      bool should_add_reading = false;
+      if (id(recent_readings).empty()) {
+        // First reading
+        should_add_reading = true;
+      } else {
+        // Check if distance changed from last reading (with small tolerance for float comparison)
+        float last_distance = id(recent_readings).back();
+        if (fabs(current_distance - last_distance) > 0.01) {  // 0.01 cm tolerance
+          should_add_reading = true;
+        }
       }
-      id(recent_readings).push_back(current_distance);
-      id(recent_timestamps).push_back(current_time);
+
+      if (should_add_reading) {
+        // Maintain rolling window of readings and timestamps
+        if (id(recent_readings).size() >= DERIVATIVE_WINDOW_SIZE) {
+          id(recent_readings).erase(id(recent_readings).begin());
+          id(recent_timestamps).erase(id(recent_timestamps).begin());
+        }
+        id(recent_readings).push_back(current_distance);
+        id(recent_timestamps).push_back(current_time);
+      }
 
       // Need at least 2 readings to calculate derivative
       if (id(recent_readings).size() < 2) {
@@ -312,13 +328,11 @@ binary_sensor:
       float time_delta_min = time_delta_ms / 60000.0;  // Convert ms to minutes
 
       // Calculate derivative with safety checks
-      float derivative;
+      float derivative = 0;
       if (time_delta_min > 0) {
         derivative = distance_delta / time_delta_min;
-      } else {
-        ESP_LOGW("regen", "Zero time delta detected - duplicate timestamps?");
-        derivative = 0;
       }
+      // Note: Zero time delta is expected when readings haven't changed yet
 
       // === START DETECTION ===
       if (!id(regen_active)) {
