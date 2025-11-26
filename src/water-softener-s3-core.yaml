@@ -1,4 +1,4 @@
-# ESPHome Water Softener Salt Monitor - v0.4.5
+# ESPHome Water Softener Salt Monitor - v0.4.6
 # GitHub: https://github.com/rmaher001/water-softener-monitor
 #
 # Simple distance-based monitoring with derivative-based regeneration detection
@@ -255,7 +255,7 @@ binary_sensor:
       // Detects sustained rate of change (derivative) rather than absolute thresholds
       const unsigned long REGEN_TIMEOUT_MINUTES = 240;  // 4 hours max duration (safety)
       const size_t DERIVATIVE_WINDOW_SIZE = 15;          // Keep last 15 readings for derivative calc
-      const size_t DERIVATIVE_START_CONFIRM = 3;         // Confirm rise over 3 consecutive derivatives
+      const size_t DERIVATIVE_START_CONFIRM = 6;         // Confirm rise over 6 consecutive derivatives
       const size_t DERIVATIVE_END_CONFIRM = 10;          // Confirm stable over 10 consecutive derivatives
 
       // Skip regeneration detection during fast polling (calibration mode)
