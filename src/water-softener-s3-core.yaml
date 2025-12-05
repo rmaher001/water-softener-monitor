@@ -491,6 +491,7 @@ text_sensor:
 
   - platform: template
     name: "Firmware Version"
+    id: firmware_version
     icon: "mdi:chip"
     update_interval: never
     lambda: |-
@@ -520,10 +521,11 @@ interval:
             id(salt_distance_raw).update();
           }
 
-# On boot - take immediate reading
+# On boot - take immediate reading and set firmware version
 esphome:
   on_boot:
     priority: -100  # After other components initialized
     then:
       - delay: 2s  # Wait for sensor to stabilize
       - component.update: salt_distance_raw
+      - component.update: firmware_version
