@@ -1,15 +1,29 @@
 # Technical Documentation
 
+## !!!! CRITICAL - DO NOT UPLOAD FIRMWARE !!!!
+
+**NEVER USE `esphome upload` OR `esphome run` COMMANDS**
+
+The user will handle all firmware uploads manually. Claude's role is LIMITED TO:
+- Compiling firmware (`esphome compile`)
+- Reading logs (`esphome logs`)
+- Code analysis and editing
+
+**DO NOT:**
+- Upload firmware to any device
+- Run `esphome upload`
+- Run `esphome run`
+- Flash any device via USB or OTA
+
+**ALWAYS wait for the user to upload firmware themselves.**
+
+## !!!! END CRITICAL SECTION !!!!
+
+---
+
 ESPHome-based water softener salt level monitoring system using M5Stack ATOM hardware and VL53L0X ToF distance sensor.
 
-## Hardware Variants
-
-### ATOM Lite (ESP32-PICO-D4)
-- ESP-IDF framework
-- Web server enabled (http://water-softener-monitor-lite.local or -lite-dev.local for dev)
-- I2C: SDA=GPIO26, SCL=GPIO32
-- Button: GPIO39 (no internal pullup)
-- RGB LED: GPIO27 (WS2812B)
+## Hardware
 
 ### ATOM S3 (ESP32-S3)
 - ESP-IDF framework (persistence issues resolved in ESPHome 2025.10+)
@@ -22,22 +36,20 @@ ESPHome-based water softener salt level monitoring system using M5Stack ATOM har
 ## Project Structure
 
 **Core:**
-- `src/water-softener-lite-core.yaml` - ATOM Lite functionality
-- `src/water-softener-s3-core.yaml` - ATOM S3 functionality
+- `src/water-softener-s3-core.yaml` - Main sensor logic and configuration
 
 **Web Installer:**
-- `src/water-softener-lite-webinstall.yaml`
-- `src/water-softener-s3-webinstall.yaml`
+- `src/water-softener-s3-webinstall.yaml` - For web-based initial flash
 
 **Development:**
-- `src/water-softener-lite-dev.yaml` - ATOM Lite (192.168.86.32)
-- `src/water-softener-s3-dev.yaml` - ATOM S3 (192.168.86.104)
+- `src/water-softener-s3-dev.yaml` - ATOM S3 (water-softener-dev.lan.ram6.com)
 
-**Dev Config Strategy (v1.4.0+):**
-- Dev configs use GitHub package refs (not `!include`) to mirror production workflow
-- Enables testing ESPHome Dashboard adoption and Home Assistant update mechanisms
-- Device names include hardware suffix to avoid mDNS conflicts during testing
-- For fast iteration on sensor logic, temporarily switch to `!include` in dev configs
+**Production:**
+- Managed via ESPHome Dashboard (water-softener-prod.lan.ram6.com)
+
+**Dev Config Strategy:**
+- Dev config uses `!include` for fast local iteration on core logic
+- Production uses ESPHome Dashboard with GitHub package refs (`@latest` tag)
 
 ## Core Logic
 
@@ -45,16 +57,13 @@ ESPHome-based water softener salt level monitoring system using M5Stack ATOM har
 Distance sensor uses `update_interval: never` and is manually triggered by interval component. Enables dynamic intervals via `update_interval_seconds` parameter without reflashing.
 
 ### Out-of-Range Handling
-Maintains last valid reading when sensor out of range (< 3cm or > 150cm):
-- `last_valid_percentage` - Persisted across reboots
 - `last_valid_status` - Persisted across reboots
-- `sensor_out_of_range` binary sensor - Indicates stale readings
+- `sensor_out_of_range` binary sensor - Indicates sensor reading issues
 
 ### Lambda Functions
-1. Salt level calculation - Validates distance, converts to percentage
-2. Out of range detection - Checks sensor validity
-3. Status text generation - Maps percentage to status strings
-4. Update interval control - Custom timing with globals and millis()
+1. Out of range detection - Checks sensor validity
+2. Regeneration detection - Derivative-based cycle detection
+3. Status text generation - Simple threshold-based status with hysteresis
 
 ### Calibration Mode
 Fast sensor polling (100ms) for setup/testing. Auto-disables after 5 minutes.
@@ -136,44 +145,25 @@ The "recovery" in sensor readings is **not salt regenerating** - it's the brine 
 - 5 minutes (1.5.0+): 288 readings/day, good balance, can detect backwash cycle
 - 1 hour: 24 readings/day, minimal load, stable readings, misses regeneration details
 
-## Regeneration Detection (1.5.0+)
+## Regeneration Detection
 
 ### Binary Sensor: "Regeneration Cycle Active"
 
-**Automatic detection of water softener regeneration cycles - works in both well-maintained and poorly maintained tanks.**
+**Derivative-based detection** - monitors rate of change (cm/min) rather than absolute thresholds.
 
 **Detection Logic:**
-- **START**: >3cm rise in distance over 5 readings OR >5cm rise over 10 readings
-- **END**: Stability achieved (±2cm variation for 30 readings), then:
-  - Well-maintained: Distance stable at new higher level
-  - Poorly maintained: Distance recovered back to baseline level
+- **START**: Sustained rising derivative above threshold (default 0.30 cm/min) for 6 consecutive readings
+- **END**: Sustained stable derivative below threshold (default 0.02 cm/min) for 10 consecutive readings
 - **Safety timeout**: 4 hours maximum
-- **False alarm reset**: Auto-clear if <5cm total rise after 1 hour
+- **Minimum duration**: Configurable (default 10 min) - cycles ending earlier are treated as false alarms
 
-**Two Operating Scenarios:**
-
-1. **Well-Maintained Tank (salt above water)**
-   - ToF measures dry salt surface
-   - During regen: distance increases as salt dissolves/settles
-   - After regen: distance stays at new higher level
-   - Detection ends when stable at new level
-
-2. **Poorly Maintained Tank (salt submerged)**
-   - ToF measures water surface
-   - During regen: distance increases as water pumps out
-   - After regen: distance decreases back down as water refills
-   - Detection ends when recovered and stable
-
-**Metrics Available in Home Assistant:**
-- Binary sensor state (ON/OFF) with timestamps
-- Users can compute additional metrics using Home Assistant template sensors:
-  - Baseline level: Capture `salt_level_percent` when cycle starts
-  - Drop amount: Track min/max of `salt_level_percent` during cycle
-  - Duration: Calculate from `last_changed` timestamp
+**Configurable Parameters (via Home Assistant):**
+- Regen Detection Rise Threshold (cm/min)
+- Regen Detection Stable Threshold (cm/min)
+- Regen Minimum Duration (minutes)
 
 **Status Sensor Behavior:**
 - "Salt Status" text sensor freezes during regeneration to prevent false alerts
-- Status changes respond immediately (no confirmation delay as of v1.6.0)
 
 ### Home Assistant Automation Examples
 
@@ -280,211 +270,42 @@ automation:
 
 **Note:** Adjust thresholds and timing based on your specific water softener model and usage patterns. Time-based softeners typically regenerate daily, while demand-based softeners may run every 3-7 days.
 
-## Manual Refill Confirmation & Status Hysteresis (1.6.0+)
+## Status Hysteresis
 
-### Problem: Water Level Fluctuations vs. Actual Salt Changes
-
-**Background:**
-- Brine tanks maintain standing water that fluctuates ±5cm around regeneration cycles
-- ToF sensor measures distance to water surface, not salt level
-- Water level changes after regeneration make status appear to improve (e.g., "Moderate" → "Good")
-- This is incorrect - salt was consumed during regeneration, not added
-
-**Example:**
-```
-Before regen: Distance 47cm, Status "Moderate" (45%)
-After regen:  Distance 41cm, Status "Good" (52%) ← WRONG!
-Reality:      Salt was consumed, water level changed
-```
-
-### Solution: Manual Refill Confirmation Button
-
-**Hardware Button (ATOM Lite only):**
-- Hold button on ATOM Lite for 3-5 seconds to confirm salt refill
-- LED flashes 3 times during hold, then solid for 2 seconds to confirm
-- Records refill timestamp in device memory (persisted across reboots)
-
-**Status Hysteresis Rule:**
-- Status can **ONLY improve** (Critical→Low, Low→Good, Good→Full) if refill button was pressed in last 24 hours
-- Status can always **degrade** (Good→Low, Low→Critical) without button press
-- Prevents false status improvements from water level fluctuations
-
-**Behavior:**
-```
-Day 1: Status = "Moderate" (45%)
-Day 2: Regen runs, water settles, reading shows 52%
-       Status: STAYS "Moderate" (can't improve without refill)
-Day 3: Reading drops to 38%
-       Status: Changes to "Low" (degradation always allowed)
-Day 4: User refills salt, holds button 3-5 seconds
-       LED flashes, confirms, reading shows 75%
-       Status: Changes to "Good" (improvement allowed after refill)
-```
-
-**Benefits:**
-- Eliminates false status improvements from water noise
-- User has definitive control over status changes
-- Salt level trend always moves downward between refills (as expected)
-- Simple physical confirmation - no network or HA required
-
-**LED Feedback:**
-- Button press detected → LED flashes 3 times (600ms total)
-- Refill confirmed → LED solid for 2 seconds
-- No LED feedback → Button press too short or too long (must be 3-5 seconds)
-
-**Logs (ESPHome):**
-```
-[refill] Manual refill confirmed - distance: 41.2cm, level: 75%
-```
-
-**Technical Details:**
-- Refill timestamp stored in NVS (persisted across reboots and power loss)
-- Hysteresis check happens before any status change
-- 24-hour window resets on each button press
-- Works entirely on-device, no Home Assistant connection required
-
-**Hardware Support:**
-- **ATOM Lite**: Button on GPIO39, RGB LED on GPIO27 (WS2812B)
-- **ATOM S3**: Button on GPIO41, RGB LED on GPIO35 (SK6812)
-
-## Measurement Accuracy & Lid Positioning
-
-### Physical Constraints
-
-**Hardware Layout:**
-- ToF sensor mounted **2 inches off-center** in round tank lid
-- Water surface not perfectly level across tank (±3 cm variation)
-- Lid rotation changes which part of water surface is measured
-- Tight lid fit prevents accidental rotation but allows manual adjustment
-
-**Rotational Sensitivity:**
-- Rotating lid across full range: **10% variance** (53-63% salt level)
-- Distance variation from rotation: **±6 cm** from center to edge
-- Critical issue: Reopening lid without alignment causes false readings
-
-### Lid Alignment Procedure
-
-**Required for Consistent Readings:**
-1. Mark both lid and tank rim at baseline position
-2. Baseline position: **41.5-41.8 cm distance** / **64-65% salt level**
-3. After opening lid (inspection/refill), align marks before closing
-4. Verify reading returns to expected range after realignment
-
-**Calibration Process:**
-1. Press calibration button for fast polling (100ms updates)
-2. Slowly rotate lid while monitoring readings
-3. Stop at baseline distance (41.5-41.8 cm)
-4. Mark lid edge and tank rim with permanent marker
-5. Document: "Lid must align with marks - misalignment causes ±5% error"
-
-### Measurement Error Budget
-
-**Normal Operating Conditions (with proper lid alignment):**
-- Sensor precision: ±0.24 cm std dev (excellent)
-- Peak-to-peak variation: 1.26 cm over 5 days
-- Coefficient of variation: 0.59% (stable)
-- **Realistic accuracy: ±1-2%** from water surface fluctuations
-
-**Implications:**
-- Day-to-day variations <3% are measurement noise, not real changes
-- Salt consumption (~2% per cycle) at edge of measurement resolution
-- Regeneration cycle drops (15-20%) easily detected above noise floor
-- Long-term trends reliable, single-cycle tracking unreliable
-
-### Salt Consumption Data
-
-**Confirmed from Regeneration Cycles:**
-- Actual salt consumption: **~2% per regeneration cycle**
-- First cycle observation: 2% drop (real consumption)
-- Second cycle observation: 6% rise (lid misalignment, not real)
-
-**Brine Tank Physics & Water Level Observations:**
-
-**Tank Configuration:**
-- Tank height: 82 cm
-- Current water level: 40 cm from bottom (16 inches)
-- Normal wet brine tank: 8-14 inches (research typical)
-- Salt is **submerged under water** (not above water line)
-- ToF sensor measures to **water surface**, not salt bed
-
-**Critical Detection Question:**
-Does the ToF approach work if salt is submerged? Depends on water level behavior:
-
-1. **Volume-based refill** (research indicates 3-4 gallons added per cycle):
-   - As salt depletes, total volume decreases
-   - Water level should gradually drop over weeks
-   - ToF reading increases → salt depletion detected ✓
-
-2. **Level-based refill** (constant water height maintained):
-   - Water level stays constant as salt depletes
-   - ToF reading stays the same → salt depletion NOT detected ❌
-
-**Injector/Venturi Concerns:**
-- Water level at 16" is above typical 8-14" range
-- Possible causes: Partially clogged injector, or normal for this model/settings
-- Clogged injector prevents complete brine draw, causing water accumulation
-- Observation plan: Monitor if water level is stable or creeping up over cycles
-
-**Variable Changes (Nov 2-3, 2025):**
-- Lid position marked and aligned to baseline
-- Softener settings adjusted (D0=7, hardness increased)
-- **All historical data before Nov 3 is not comparable**
-
-**Current Status (as of Nov 3, 2025):**
-- Baseline established post-regeneration: **40.9 cm / 66.3%** (with new settings)
-- First observation phase (2-3 cycles): Monitor water level stability
-  - If stable at ~40-41 cm → System operating normally, continue observation
-  - If creeping up (41 → 42 → 43 cm) → Injector needs cleaning before baseline collection
-- Second observation phase (3-5 cycles after system verified): Confirm consumption pattern
-- Data required before implementing v1.7.0 detection logic
-
-**Future v1.7.0 Implementation Plan:**
-- Add regeneration cycle counter (resets on manual refill button press)
-- Expose cycle count as sensor in Home Assistant
-- Detection logic TBD based on observational data:
-  - If ToF increases reliably → sensor-based detection
-  - If ToF stays constant → cycle-based estimation
-  - Hybrid approach likely needed for robust alerts
-
-**System Purpose:**
-- **Primary goal**: Alert when salt is low (prevent running out)
-- Regeneration detection: Confirms system operation
-- Consumption tracking: Unreliable due to ±1-2% noise vs 2% consumption
-- Manual refill button: Prevents false status improvements
+Current implementation uses simple distance-based hysteresis (±2cm dead zone) to prevent status bouncing between "Good" and "Refill" states.
 
 ## Configuration Parameters
 
-**Measurement:**
+**Measurement (via Home Assistant numbers):**
 - Tank Height (30-150cm, default 100cm)
-- Full Level Distance (5-50cm, default 20cm)
-- Update Interval (1-86400s, default 300s / 5 minutes)
+- Refill Threshold Distance (10-120cm, default 43cm)
+- Update Interval (30-300s, default 60s)
 
-**Thresholds:**
-- Critical: 20%, Low: 40%, Good: 60%, Full: 80%
+**Regeneration Detection:**
+- Rise Threshold (0.01-0.50 cm/min, default 0.30)
+- Stable Threshold (0.005-0.10 cm/min, default 0.02)
+- Minimum Duration (1-30 min, default 10)
+
+**Status:**
+- "Good" when distance < threshold
+- "Refill" when distance >= threshold
 
 ## Version Management
 
-**Version String Format**: `X.Y.Z-variant` (e.g., `1.5.0-s3`, `1.5.0-lite`)
+**Version String Format**: `X.Y.Z-variant` (e.g., `1.9.3-s3`)
 
 **How Versioning Works:**
-1. Version defined in webinstall configs (`src/water-softener-{s3|lite}-webinstall.yaml`):
+1. Version defined in webinstall config (`src/water-softener-s3-webinstall.yaml`):
    ```yaml
    substitutions:
-     version: "1.5.0-s3"  # or "1.5.0-lite"
+     version: "1.9.3-s3"
    ```
 
-2. Version passed to core configs via `${version}` substitution
+2. Version passed to core config via `${version}` substitution
 
-3. Exposed in two places:
-   - **Home Assistant**: `text_sensor.water_softener_firmware_version`
-   - **Device Info**: Settings → Devices → Water Softener → "Project Version"
+3. Exposed via `text_sensor.water_softener_firmware_version` in Home Assistant
 
-**Verifying Active Version:**
-- Check `text_sensor.water_softener_firmware_version` in Home Assistant
-- Or check device info in HA: Settings → Devices → Water Softener Monitor
-- Or look for version-specific features (e.g., 1.5.0 has `binary_sensor.water_softener_regeneration_cycle_active`)
-
-**Important**: Git tags use NO "v" prefix (use `1.5.0`, NOT `v1.5.0`)
+**Important**: Git tags use NO "v" prefix (use `1.9.3`, NOT `v1.9.3`)
 
 ## Development Commands
 
@@ -516,27 +337,26 @@ Does the ToF approach work if salt is submerged? Depends on water level behavior
 4. Only then proceed with upload/flash
 
 ```bash
-# ATOM Lite
-esphome compile src/water-softener-lite-dev.yaml  # SAFE - compile only
-esphome upload src/water-softener-lite-dev.yaml --device 192.168.86.32  # FORBIDDEN without approval
-esphome logs src/water-softener-lite-dev.yaml --device 192.168.86.32  # SAFE - read only
-
-# ATOM S3
+# ATOM S3 Dev
 esphome compile src/water-softener-s3-dev.yaml  # SAFE - compile only
-esphome upload src/water-softener-s3-dev.yaml --device 192.168.86.104  # FORBIDDEN without approval
-esphome logs src/water-softener-s3-dev.yaml --device 192.168.86.104  # SAFE - read only
+esphome logs src/water-softener-s3-dev.yaml --device water-softener-dev.lan.ram6.com  # SAFE - read only
+
+# FORBIDDEN - Never run these without explicit user approval:
+# esphome upload src/water-softener-s3-dev.yaml --device water-softener-dev.lan.ram6.com
+# esphome run src/water-softener-s3-dev.yaml --device water-softener-dev.lan.ram6.com
 ```
 
 ## Release Workflow
 
-1. Update version in webinstall configs (e.g., `1.3.1-s3`, `1.3.1-lite`)
-2. Commit changes
-3. Create and push git tag (NO "v" prefix): `git tag -a 1.5.0 -m "Release 1.5.0"`
-   - **IMPORTANT**: Use `1.5.0` format, NOT `v1.5.0` (this project does not use "v" prefix)
-4. Update `dashboard_import` URLs to reference new tag
-5. Compile both firmware variants
-6. Copy to docs/ and update manifest files
-7. Commit, push, and test ESPHome Dashboard adoption
+1. Update version in `src/water-softener-s3-webinstall.yaml`
+2. Update `dashboard_import` URL to reference new tag
+3. Compile firmware: `esphome compile src/water-softener-s3-webinstall.yaml`
+4. Copy firmware to docs/: `cp src/.esphome/build/.../firmware.factory.bin docs/water-softener-monitor-s3-vX.Y.Z.bin`
+5. Update `docs/manifest-s3.json` with new version and filename
+6. Commit changes
+7. Create and push git tag (NO "v" prefix): `git tag -a 1.9.3 -m "Release 1.9.3"`
+8. Update `latest` tag: `git tag -f latest && git push origin latest -f`
+9. Push to GitHub
 
 ## Deployment Model
 
@@ -548,31 +368,5 @@ esphome logs src/water-softener-s3-dev.yaml --device 192.168.86.104  # SAFE - re
 ## Technical Notes
 
 - BLE Improv uses `authorizer: none` for frictionless setup
-- Version tags in `dashboard_import` ensure reproducible builds
-- Web installer is standard deployment path (not ESPHome Dashboard)
-- See DEVELOPMENT.md for detailed workflow documentation
-
-## ESPHome Update Notifications
-
-**Observed Behavior (ESPHome 2025.10.x):**
-
-Home Assistant's update list for ESPHome devices has limitations that can cause devices to not appear:
-
-**Key Findings:**
-- Update list shows only **online/discoverable** devices that need updates
-- Offline or undiscoverable devices are excluded (even if they need updates)
-- No fixed limit on number of devices - varies based on connectivity
-- Observed: 8 devices initially → 10 devices after powering on 2 monitors
-
-**Related Issue:**
-- GitHub issue #6775: Reports 26 devices in ESPHome but only 7 shown in HA update list
-- Suggests network/discovery issues rather than hard limits
-
-**Recommended Update Workflow:**
-1. **ESPHome Dashboard "Update All"** - Most reliable, updates all devices in dashboard
-2. **Home Assistant update list** - Only shows reachable devices needing updates
-
-**For Users:**
-- Devices must be online/reachable to appear in HA update notifications
-- ESPHome Dashboard adoption recommended for consistent update visibility
-- Offline devices won't show update prompts even if they need platform updates
+- Production device uses `@latest` tag for GitHub package import
+- ESPHome Dashboard manages production device updates
