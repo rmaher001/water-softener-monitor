@@ -28,3 +28,5 @@ Thumbs.db
 # Testing and development
 test-config/
 .playwright-mcp/
+CLAUDE.md
+ANALYSIS.md
