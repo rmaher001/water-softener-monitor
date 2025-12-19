@@ -40,6 +40,24 @@ i2c:
   scl: GPIO1
   scan: true
 
+# Status LED (SK6812 RGB on GPIO35)
+light:
+  - platform: esp32_rmt_led_strip
+    id: status_led
+    name: "Status LED"
+    rgb_order: GRB
+    pin: GPIO35
+    num_leds: 1
+    chipset: SK6812
+    restore_mode: ALWAYS_OFF
+    effects:
+      - pulse:
+          name: "Slow Pulse"
+          transition_length: 1.5s
+          update_interval: 2s
+          min_brightness: 10%
+          max_brightness: 100%
+
 # Global variables
 globals:
   - id: last_valid_status
@@ -481,9 +499,30 @@ text_sensor:
         }
       }
 
-      // Log status changes
+      // Log status changes and update LED
       if (new_status != current_status) {
         ESP_LOGI("status", "Status change: %s -> %s", current_status.c_str(), new_status.c_str());
+
+        // Update status LED based on new status
+        if (new_status == "Refill") {
+          // Slow pulsing red for refill needed
+          auto call = id(status_led).turn_on();
+          call.set_rgb(1.0, 0.0, 0.0);  // Red
+          call.set_brightness(0.5);      // 50% max brightness
+          call.set_effect("Slow Pulse");
+          call.perform();
+        } else if (new_status == "Good") {
+          // Solid green for good status
+          auto call = id(status_led).turn_on();
+          call.set_rgb(0.0, 1.0, 0.0);  // Green
+          call.set_brightness(0.35);     // 35% brightness
+          call.set_effect("None");
+          call.perform();
+        } else {
+          // Turn off for checking/unknown status
+          auto call = id(status_led).turn_off();
+          call.perform();
+        }
       }
 
       id(last_valid_status) = new_status;
@@ -521,7 +560,7 @@ interval:
             id(salt_distance_raw).update();
           }
 
-# On boot - take immediate reading and set firmware version
+# On boot - take immediate reading, set firmware version, and initialize LED
 esphome:
   on_boot:
     priority: -100  # After other components initialized
@@ -529,3 +568,20 @@ esphome:
       - delay: 2s  # Wait for sensor to stabilize
       - component.update: salt_distance_raw
       - component.update: firmware_version
+      - delay: 500ms  # Wait for status to be computed
+      - lambda: |-
+          // Initialize LED based on current status
+          std::string status = id(last_valid_status);
+          if (status == "Refill") {
+            auto call = id(status_led).turn_on();
+            call.set_rgb(1.0, 0.0, 0.0);
+            call.set_brightness(0.5);
+            call.set_effect("Slow Pulse");
+            call.perform();
+          } else if (status == "Good") {
+            auto call = id(status_led).turn_on();
+            call.set_rgb(0.0, 1.0, 0.0);
+            call.set_brightness(0.35);
+            call.set_effect("None");
+            call.perform();
+          }
