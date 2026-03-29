@@ -1,4 +1,4 @@
-# Malfunction Detection - Future Feature (v1.7.0+)
+# Malfunction Detection - Future Feature
 
 ## Decision: Wait for Baseline Data
 
@@ -123,7 +123,7 @@ if (change_from_baseline < -id(malfunction_threshold_cm)->state) {
   // Check refill window
   unsigned long hrs_since_refill = (millis()/1000 - id(last_manual_refill_time)) / 3600;
 
-  if (hrs_since_refill > 24 && !id(regen_active)) {
+  if (hrs_since_refill > 24) {
     id(malfunction_detected)->publish_state(true);
     ESP_LOGW("malfunction", "Distance decreased %.1fcm from baseline (%.1f→%.1f)",
              abs(change_from_baseline), baseline_distance_post_regen, current_distance);
@@ -132,11 +132,9 @@ if (change_from_baseline < -id(malfunction_threshold_cm)->state) {
   id(malfunction_detected)->publish_state(false);
 }
 
-// Update baseline after regeneration completes
-if (id(regen_active) && previous_regen_active) {
-  // Cycle just ended, update baseline
-  baseline_distance_post_regen = current_distance;
-}
+// Note: As of v2.0.0, regeneration is detected via step detection
+// (permanent distance increase after salt consumption).
+// The step_baseline global tracks the post-regen baseline automatically.
 ```
 
 ## Why Wait?

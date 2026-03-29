@@ -1,7 +1,8 @@
-# ESPHome Water Softener Salt Monitor - v0.4.6
+# ESPHome Water Softener Salt Monitor - v2.0.0
 # GitHub: https://github.com/rmaher001/water-softener-monitor
 #
-# Simple distance-based monitoring with derivative-based regeneration detection
+# Distance-based monitoring with step-based regeneration detection
+# Detects permanent distance increases after regeneration cycles (salt consumption)
 # All advanced analytics handled in Home Assistant
 
 esp32:
@@ -65,36 +66,27 @@ globals:
     restore_value: yes
     initial_value: '"Checking..."'
 
-  # Derivative-based regeneration detection tracking
-  - id: regen_active
-    type: bool
-    restore_value: no
-    initial_value: 'false'
+  # Step-based regeneration detection
+  - id: step_baseline
+    type: float
+    restore_value: yes
+    initial_value: '0.0'
 
-  - id: regen_start_time
+  - id: step_state
+    type: int
+    restore_value: no
+    initial_value: '0'
+
+  - id: step_confirm_start
     type: unsigned long
     restore_value: no
     initial_value: '0'
 
-  # Store recent readings with timestamps for derivative calculation
-  - id: recent_readings
-    type: std::vector<float>
-    restore_value: no
-
-  - id: recent_timestamps
-    type: std::vector<unsigned long>
-    restore_value: no
-
-  # Derivative tracking for start/end detection
-  - id: rise_counter
+  # Hours since last regeneration (incremented hourly, survives reboots)
+  - id: hours_since_regen
     type: int
-    restore_value: no
-    initial_value: '0'
-
-  - id: stable_counter
-    type: int
-    restore_value: no
-    initial_value: '0'
+    restore_value: yes
+    initial_value: '9999'
 
 # Configurable settings
 number:
@@ -141,45 +133,45 @@ number:
     mode: box
 
   - platform: template
-    name: "Regen Detection Rise Threshold"
-    id: regen_rise_threshold
+    name: "Regen Step Threshold"
+    id: regen_step_threshold
     entity_category: "config"
     optimistic: true
     restore_value: true
-    initial_value: 0.30
-    min_value: 0.01
-    max_value: 0.50
-    step: 0.01
-    unit_of_measurement: "cm/min"
-    icon: "mdi:chart-line-variant"
+    initial_value: 2.0
+    min_value: 1.0
+    max_value: 10.0
+    step: 0.5
+    unit_of_measurement: "cm"
+    icon: "mdi:stairs"
     mode: box
 
   - platform: template
-    name: "Regen Detection Stable Threshold"
-    id: regen_stable_threshold
+    name: "Regen Confirmation Hours"
+    id: regen_confirmation_hours
     entity_category: "config"
     optimistic: true
     restore_value: true
-    initial_value: 0.02
-    min_value: 0.005
-    max_value: 0.10
-    step: 0.005
-    unit_of_measurement: "cm/min"
-    icon: "mdi:chart-line"
-    mode: box
-
-  - platform: template
-    name: "Regen Minimum Duration"
-    id: regen_min_duration
-    entity_category: "config"
-    optimistic: true
-    restore_value: true
-    initial_value: 10
+    initial_value: 6
     min_value: 1
+    max_value: 24
+    step: 1
+    unit_of_measurement: "h"
+    icon: "mdi:timer-check-outline"
+    mode: box
+
+  - platform: template
+    name: "Regen Overdue Days"
+    id: regen_overdue_days
+    entity_category: "config"
+    optimistic: true
+    restore_value: true
+    initial_value: 20
+    min_value: 5
     max_value: 30
     step: 1
-    unit_of_measurement: "min"
-    icon: "mdi:timer-outline"
+    unit_of_measurement: "days"
+    icon: "mdi:calendar-alert"
     mode: box
 
 # Switches
@@ -194,10 +186,7 @@ switch:
       - switch.turn_off: fast_polling_mode
     on_turn_off:
       - lambda: |-
-          // Clear derivative history when exiting fast polling to prevent false interval change warnings
-          id(recent_readings).clear();
-          id(recent_timestamps).clear();
-          ESP_LOGI("regen", "Fast polling disabled - derivative history cleared");
+          ESP_LOGI("config", "Fast polling disabled");
 
 # Buttons
 button:
@@ -211,6 +200,20 @@ button:
           float new_threshold = tank_height * 0.43;
           id(refill_threshold_cm).publish_state(new_threshold);
           ESP_LOGI("config", "Default thresholds set: threshold=%.1fcm (43%% of %.0fcm tank height)", new_threshold, tank_height);
+
+  - platform: template
+    name: "Mark Regeneration Now"
+    id: mark_regen_now
+    icon: "mdi:water-sync"
+    on_press:
+      - lambda: |-
+          id(hours_since_regen) = 0;
+          id(step_baseline) = id(salt_distance_raw).state;
+          id(step_state) = 0;
+          id(step_confirm_start) = 0;
+          id(regen_overdue).publish_state(false);
+          id(last_regen_sensor).publish_state(0.0);
+          ESP_LOGI("step", "Manual regen mark: baseline=%.1f cm", id(step_baseline));
 
   - platform: restart
     name: "Restart"
@@ -239,12 +242,106 @@ sensor:
     on_value:
       then:
         - component.update: salt_status_text
+        - lambda: |-
+            // Step-based regeneration detection v2.0.0
+            // Detects permanent distance increases after regeneration (salt consumption)
+            float distance = id(salt_distance_raw).state;
+            if (isnan(distance)) return;
+
+            float baseline = id(step_baseline);
+            float step_thresh = id(regen_step_threshold).state;
+            unsigned long now_ms = millis();
+
+            const float REFILL_DROP_CM = 10.0;
+            const float EMA_ALPHA = 0.05;
+            const float NOISE_BAND_CM = 1.5;
+
+            // === INITIALIZE BASELINE ON FIRST VALID READING ===
+            if (baseline <= 0.0) {
+              id(step_baseline) = distance;
+              ESP_LOGI("step", "Baseline initialized to %.1f cm", distance);
+              return;
+            }
+
+            // === SALT REFILL DETECTION (large drop) ===
+            if (distance < baseline - REFILL_DROP_CM) {
+              ESP_LOGI("step", "Salt refill detected: %.1f -> %.1f cm (drop %.1f)",
+                       baseline, distance, baseline - distance);
+              id(step_baseline) = distance;
+              id(step_state) = 0;
+              id(step_confirm_start) = 0;
+              return;
+            }
+
+            // === STATE MACHINE ===
+            if (id(step_state) == 0) {
+              // MONITORING state: update EMA baseline for readings within noise band
+              if (fabs(distance - baseline) < NOISE_BAND_CM) {
+                id(step_baseline) = EMA_ALPHA * distance + (1.0 - EMA_ALPHA) * baseline;
+              }
+
+              // Check for step increase
+              if (distance > baseline + step_thresh) {
+                id(step_state) = 1;
+                id(step_confirm_start) = now_ms;
+                ESP_LOGI("step", "Potential step: %.1f cm (baseline %.1f + thresh %.1f = %.1f)",
+                         distance, baseline, step_thresh, baseline + step_thresh);
+              }
+
+            } else if (id(step_state) == 1) {
+              // CONFIRMING state: check if dropped back near baseline
+              if (distance < baseline + step_thresh * 0.5) {
+                ESP_LOGI("step", "Step not confirmed, returned near baseline: %.1f cm", distance);
+                id(step_state) = 0;
+                id(step_confirm_start) = 0;
+                return;
+              }
+
+              // Check confirmation time elapsed (with millis overflow handling)
+              unsigned long elapsed_ms;
+              if (now_ms >= id(step_confirm_start)) {
+                elapsed_ms = now_ms - id(step_confirm_start);
+              } else {
+                elapsed_ms = (ULONG_MAX - id(step_confirm_start)) + now_ms + 1;
+              }
+
+              float confirm_hours = id(regen_confirmation_hours).state;
+              unsigned long confirm_ms = (unsigned long)(confirm_hours * 3600000.0);
+
+              if (elapsed_ms >= confirm_ms) {
+                // STEP CONFIRMED = regeneration detected
+                ESP_LOGI("step", "Regeneration confirmed! Baseline: %.1f -> %.1f cm (step %.1f, after %.1f hours)",
+                         baseline, distance, distance - baseline, elapsed_ms / 3600000.0);
+                id(step_baseline) = distance;
+                id(hours_since_regen) = 0;
+                id(step_state) = 0;
+                id(step_confirm_start) = 0;
+
+                // Force update of dependent sensors
+                id(regen_overdue).publish_state(false);
+                id(last_regen_sensor).publish_state(0.0);
+              }
+            }
 
   # WiFi signal strength
   - platform: wifi_signal
     name: "WiFi Signal"
     update_interval: 60s
     icon: "mdi:wifi"
+
+  # Days since last detected regeneration
+  - platform: template
+    name: "Last Regeneration"
+    id: last_regen_sensor
+    icon: "mdi:water-sync"
+    unit_of_measurement: "days"
+    accuracy_decimals: 1
+    update_interval: 3600s
+    lambda: |-
+      if (id(hours_since_regen) >= 9999) {
+        return NAN;  // Never detected
+      }
+      return id(hours_since_regen) / 24.0;
 
 # Binary sensors
 binary_sensor:
@@ -265,192 +362,16 @@ binary_sensor:
       return false;
 
   - platform: template
-    name: "Regeneration Cycle Active"
-    id: regen_cycle_active
-    icon: "mdi:water-sync"
+    name: "Regeneration Overdue"
+    id: regen_overdue
+    icon: "mdi:calendar-alert"
+    device_class: problem
     lambda: |-
-      // Derivative-based regeneration detection v0.4.1
-      // Detects sustained rate of change (derivative) rather than absolute thresholds
-      const unsigned long REGEN_TIMEOUT_MINUTES = 240;  // 4 hours max duration (safety)
-      const size_t DERIVATIVE_WINDOW_SIZE = 15;          // Keep last 15 readings for derivative calc
-      const size_t DERIVATIVE_START_CONFIRM = 6;         // Confirm rise over 6 consecutive derivatives
-      const size_t DERIVATIVE_END_CONFIRM = 10;          // Confirm stable over 10 consecutive derivatives
-
-      // Skip regeneration detection during fast polling (calibration mode)
-      if (id(fast_polling_mode).state) {
-        return id(regen_active);
+      if (id(hours_since_regen) >= 9999) {
+        return false;  // Never detected yet, not overdue
       }
-
-      float current_distance = id(salt_distance_raw).state;
-      unsigned long current_time = millis();
-
-      // Skip processing if sensor reading is invalid
-      if (isnan(current_distance)) {
-        return id(regen_active);
-      }
-
-      // Get configurable thresholds from UI
-      float rise_threshold = id(regen_rise_threshold).state;      // cm/min
-      float stable_threshold = id(regen_stable_threshold).state;  // cm/min
-      unsigned long min_duration_ms = (unsigned long)(id(regen_min_duration).state * 60000);  // Convert min to ms
-
-      // Validate configuration parameters
-      if (stable_threshold >= rise_threshold) {
-        ESP_LOGW("regen", "Invalid config: stable_threshold (%.3f) >= rise_threshold (%.3f). Detection disabled.",
-                 stable_threshold, rise_threshold);
-        return id(regen_active);
-      }
-
-      // Only add new readings if the distance has actually changed
-      // This prevents duplicate timestamps when lambda is called multiple times with same sensor value
-      bool should_add_reading = false;
-      if (id(recent_readings).empty()) {
-        // First reading
-        should_add_reading = true;
-      } else {
-        // Check if distance changed from last reading (with small tolerance for float comparison)
-        float last_distance = id(recent_readings).back();
-        if (fabs(current_distance - last_distance) > 0.01) {  // 0.01 cm tolerance
-          should_add_reading = true;
-        }
-      }
-
-      if (should_add_reading) {
-        // Maintain rolling window of readings and timestamps
-        if (id(recent_readings).size() >= DERIVATIVE_WINDOW_SIZE) {
-          id(recent_readings).erase(id(recent_readings).begin());
-          id(recent_timestamps).erase(id(recent_timestamps).begin());
-        }
-        id(recent_readings).push_back(current_distance);
-        id(recent_timestamps).push_back(current_time);
-      }
-
-      // Need at least 2 readings to calculate derivative
-      if (id(recent_readings).size() < 2) {
-        return id(regen_active);
-      }
-
-      // Calculate derivative (rate of change in cm/min) with overflow-safe time delta
-      size_t n = id(recent_readings).size();
-      float distance_delta = id(recent_readings)[n-1] - id(recent_readings)[n-2];
-
-      // Handle millis() overflow (every 49.7 days)
-      unsigned long time_delta_ms;
-      if (id(recent_timestamps)[n-1] >= id(recent_timestamps)[n-2]) {
-        // Normal case: no overflow
-        time_delta_ms = id(recent_timestamps)[n-1] - id(recent_timestamps)[n-2];
-      } else {
-        // Overflow occurred: calculate wraparound distance
-        time_delta_ms = (ULONG_MAX - id(recent_timestamps)[n-2]) + id(recent_timestamps)[n-1] + 1;
-      }
-
-      float time_delta_min = time_delta_ms / 60000.0;  // Convert ms to minutes
-
-      // Calculate derivative with safety checks
-      float derivative = 0;
-      if (time_delta_min > 0) {
-        derivative = distance_delta / time_delta_min;
-      }
-      // Note: Zero time delta is expected when readings haven't changed yet
-
-      // === START DETECTION ===
-      if (!id(regen_active)) {
-        // Check if derivative indicates sustained rise
-        if (derivative > rise_threshold) {
-          id(rise_counter) = id(rise_counter) + 1;
-          id(stable_counter) = 0;  // Reset stable counter
-        } else {
-          id(rise_counter) = 0;  // Reset rise counter if derivative drops
-        }
-
-        // Start detection if sustained rise confirmed
-        if (id(rise_counter) >= DERIVATIVE_START_CONFIRM) {
-          id(regen_active) = true;
-          id(regen_start_time) = current_time;
-          id(rise_counter) = 0;
-          id(stable_counter) = 0;
-          ESP_LOGI("regen", "Regeneration started - derivative: %.3f cm/min (threshold: %.3f)",
-                   derivative, rise_threshold);
-        }
-      }
-
-      // === END DETECTION ===
-      if (id(regen_active)) {
-        // Calculate elapsed time with overflow handling
-        unsigned long elapsed_ms;
-        if (current_time >= id(regen_start_time)) {
-          elapsed_ms = current_time - id(regen_start_time);
-        } else {
-          // Overflow occurred during regeneration
-          elapsed_ms = (ULONG_MAX - id(regen_start_time)) + current_time + 1;
-        }
-        unsigned long elapsed_min = elapsed_ms / 60000;
-
-        // Diagnostic logging every 5 minutes during active regeneration
-        static unsigned long last_log_time = 0;
-        if (current_time - last_log_time > 300000 || last_log_time == 0) {
-          ESP_LOGD("regen", "Active: %lu min elapsed, derivative=%.3f cm/min, stable_counter=%d",
-                   elapsed_min, derivative, id(stable_counter));
-          last_log_time = current_time;
-        }
-
-        // Safety timeout: 4 hours maximum
-        if (elapsed_min > REGEN_TIMEOUT_MINUTES) {
-          ESP_LOGI("regen", "Regeneration ended - timeout after %lu minutes", elapsed_min);
-          id(regen_active) = false;
-          id(rise_counter) = 0;
-          id(stable_counter) = 0;
-          id(recent_readings).clear();
-          id(recent_timestamps).clear();
-          return false;
-        }
-
-        // False alarm: Cycle ended too quickly (noise/spike)
-        if (elapsed_ms < min_duration_ms) {
-          // Check if derivative indicates stable (near-zero rate of change)
-          if (abs(derivative) < stable_threshold) {
-            id(stable_counter) = id(stable_counter) + 1;
-          } else {
-            id(stable_counter) = 0;
-          }
-
-          // If stable too early, it was likely a false alarm
-          if (id(stable_counter) >= DERIVATIVE_END_CONFIRM) {
-            ESP_LOGI("regen", "Regeneration ended - false alarm (duration: %lu ms < %lu ms minimum)",
-                     elapsed_ms, min_duration_ms);
-            id(regen_active) = false;
-            id(rise_counter) = 0;
-            id(stable_counter) = 0;
-            id(recent_readings).clear();
-            id(recent_timestamps).clear();
-            return false;
-          }
-        }
-        // Normal end detection: sustained stable derivative
-        else {
-          // Check if derivative indicates stable (near-zero rate of change)
-          if (abs(derivative) < stable_threshold) {
-            id(stable_counter) = id(stable_counter) + 1;
-            id(rise_counter) = 0;
-          } else {
-            id(stable_counter) = 0;
-            id(rise_counter) = 0;  // Reset both counters when not stable
-          }
-
-          // End detection if sustained stability confirmed
-          if (id(stable_counter) >= DERIVATIVE_END_CONFIRM) {
-            ESP_LOGI("regen", "Regeneration ended - stable derivative after %lu minutes", elapsed_min);
-            id(regen_active) = false;
-            id(rise_counter) = 0;
-            id(stable_counter) = 0;
-            id(recent_readings).clear();
-            id(recent_timestamps).clear();
-            return false;
-          }
-        }
-      }
-
-      return id(regen_active);
+      int overdue_hours = (int)(id(regen_overdue_days).state * 24);
+      return id(hours_since_regen) >= overdue_hours;
 
 # Status text
 text_sensor:
@@ -462,11 +383,6 @@ text_sensor:
     lambda: |-
       // Status hysteresis configuration
       const float STATUS_HYSTERESIS_CM = 2.0;  // Dead zone to prevent status bouncing
-
-      // Freeze status during regeneration cycle
-      if (id(regen_active)) {
-        return {id(last_valid_status)};
-      }
 
       float distance = id(salt_distance_raw).state;
       float threshold = id(refill_threshold_cm).state;
@@ -547,6 +463,20 @@ interval:
           then:
             - component.update: salt_distance_raw
 
+  # Hourly increment of regen tracking counter
+  - interval: 3600s
+    then:
+      - lambda: |-
+          if (id(hours_since_regen) < 9999) {
+            id(hours_since_regen) = id(hours_since_regen) + 1;
+            int overdue_hours = (int)(id(regen_overdue_days).state * 24);
+
+            if (id(hours_since_regen) >= overdue_hours) {
+              id(regen_overdue).publish_state(true);
+              ESP_LOGW("step", "Regeneration overdue! %d hours since last detected step", id(hours_since_regen));
+            }
+          }
+
   # Normal update interval
   - interval: 1s
     then:
@@ -570,6 +500,8 @@ esphome:
       - component.update: firmware_version
       - delay: 500ms  # Wait for status to be computed
       - lambda: |-
+          ESP_LOGI("step", "Boot: baseline=%.1f cm, hours_since_regen=%d, state=%d",
+                   id(step_baseline), id(hours_since_regen), id(step_state));
           // Initialize LED based on current status
           std::string status = id(last_valid_status);
           if (status == "Refill") {
