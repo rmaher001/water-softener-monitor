@@ -1,0 +1,263 @@
+---
+name: release
+description: Full release pipeline for the water-softener ESPHome project — pre-flight safety gate (PII/dev-artifact scan), code review, compile S3+Lite, stage binaries, update manifests, commit, tag, push, publish GitHub release with auto-drafted notes, verify Pages deploy.
+disable-model-invocation: false
+argument-hint: <version> [--variants s3,lite] [--dry-run]
+---
+
+# Water Softener Release Pipeline
+
+Release a new version of the water-softener firmware end-to-end. User provides the version number (e.g. `2.0.1`); skill applies `-s3` / `-lite` suffixes automatically.
+
+**Autonomous by default.** Stops only on:
+- Pre-flight safety failure
+- Compile failure
+- Code-reviewer flagging substantive issues (non-trivial fixes)
+- Push/tag conflict
+- Pages deploy failure
+
+**Dry-run mode** (`--dry-run`): print the full plan including commit message and release notes, but make no edits, no commits, no pushes.
+
+## Arguments
+
+- `<version>` — required. Format `X.Y.Z` (no `v` prefix, no variant suffix). Example: `2.0.1`.
+- `--variants` — optional, comma-separated. Default: `s3,lite`. Example: `--variants s3` to skip Lite.
+- `--dry-run` — optional flag. No side effects.
+
+## Branch detection
+
+Before running, check `git branch --show-current`:
+- On `master`: master-direct release flow (build + commit + tag + push).
+- On any other branch: feature-branch flow — build + commit to branch + open PR; do NOT tag or move `latest`. Tell user to merge + re-invoke on master to finalize.
+
+## Step 1 — Pre-flight safety gate (STOP on any failure)
+
+Run all checks. On failure: print a clear report grouped by severity and STOP. Do not proceed to step 2.
+
+### 1a. Working tree
+
+- `git status --porcelain` — must be clean (no uncommitted/untracked files).
+
+### 1b. Forbidden public-repo files
+
+- `git ls-files | grep -E '^(DEVELOPMENT|CLAUDE|ANALYSIS|CHANGELOG)\.md$|\.env$|\.vscode/|\.idea/|_test\.py$'` — must return empty.
+- If any tracked: STOP, show which, ask user to resolve (either `git rm` them first or add to `.gitignore` — skill does not auto-delete).
+
+### 1c. PII and secrets scan (tracked files only)
+
+Grep tracked files in `src/`, `docs/`, root for:
+- Email addresses: `[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}` — allow-list any GitHub no-reply addresses already present.
+- Private IP ranges: `\b(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)\d+\.\d+\b`
+- MAC addresses: `([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}`
+- Internal hostnames: `\.local\b|\.lan\b|ram6\.com`
+- Generic secrets: `password\s*[:=]\s*["'][^"']+["']` (allow-list the known fallback `configme123` — it's the intentional Improv setup AP password, documented).
+
+On any hit NOT on the allow-list: STOP with the file + line. Ask user to redact before proceeding.
+
+### 1d. Version sanity
+
+- Parse arg `<version>` — must match `^\d+\.\d+\.\d+$`.
+- Compare against existing git tags — must not duplicate (`git tag -l '<version>'` empty).
+- New version > last release version (semver compare).
+
+### 1e. `.gitignore` sanity
+
+Must contain at minimum: `secrets.yaml`, `src/secrets.yaml`, `.esphome/`, `CLAUDE.md`, `ANALYSIS.md`, `DEVELOPMENT.md`, `.vscode/`, `.idea/`.
+
+### 1f. Report format
+
+If any check fails, output:
+```
+PRE-FLIGHT FAILED
+=================
+[BLOCKING] <check-name>: <details>
+[WARNING]  <check-name>: <details>
+```
+Then STOP.
+
+## Step 2 — Apply version bump
+
+For each variant in `--variants`:
+- Edit `src/water-softener-<variant>-webinstall.yaml`: change the `version: "X.Y.Z-<variant>"` substitution line.
+- Edit `src/water-softener-<variant>-core.yaml` line 1: update the `# ESPHome Water Softener Salt Monitor - vX.Y.Z` header comment.
+
+If values are already at the target version: skip the edit silently (idempotent).
+
+## Step 3 — Code review (launch agent, wait for result)
+
+Launch `code-reviewer` agent with the diff so far:
+
+```
+Review the diff of branch <current-branch> vs master for a release of v<version>.
+Files touched so far: <list>.
+Goal: catch regressions, race conditions, and stylistic drift from the rest of the codebase.
+Report BLOCKING issues, WARNINGS, and cosmetic nits separately.
+```
+
+Wait for agent output.
+
+### Handling feedback
+
+- If reviewer reports no BLOCKING or WARNING issues: continue to step 4.
+- If reviewer reports only **cosmetic nits** (typos in comments, header version bumps, whitespace): auto-apply them if the edits are obvious one-liners, then continue.
+- If reviewer reports BLOCKING or WARNING issues requiring judgment: STOP. Show the report to the user. Do not auto-fix.
+
+## Step 4 — Compile firmware
+
+For each variant in `--variants`:
+
+```bash
+source ~/esphome/venv/bin/activate && esphome compile src/water-softener-<variant>-webinstall.yaml
+```
+
+Wait for SUCCESS. On failure: STOP, print the last 30 lines of output.
+
+**Build-path quirk** — both S3 and Lite compile to the same output directory because they share `name: water-softener-monitor` in `esphome:`. To avoid one overwriting the other:
+1. Compile S3 first.
+2. Copy `src/.esphome/build/water-softener-monitor/.pioenvs/water-softener-monitor/firmware.factory.bin` → staging (see step 5).
+3. THEN compile Lite.
+4. Copy Lite binary from same path → staging.
+
+If `--variants` has only one, no conflict — just compile and copy.
+
+## Step 5 — Stage binaries in `docs/`
+
+After each compile, copy the factory binary:
+```bash
+cp src/.esphome/build/water-softener-monitor/.pioenvs/water-softener-monitor/firmware.factory.bin \
+   docs/water-softener-monitor-<variant>-v<version>.bin
+```
+
+**Size sanity check** — compare new binary size to the previous same-variant binary in `docs/`:
+- If new is >20% smaller or >20% larger: print a WARNING and ask user to acknowledge before continuing.
+- Otherwise continue silently.
+
+Log the `shasum` of each new binary for audit.
+
+## Step 6 — Update manifest JSON files
+
+For each variant in `--variants`:
+- `docs/manifest-<variant>.json`: update `version` field to `<version>` and `builds[0].parts[0].path` to `water-softener-monitor-<variant>-v<version>.bin`.
+
+Preserve formatting.
+
+## Step 7 — Release notes
+
+Auto-draft notes from `git log <last-tag>..HEAD --pretty=format:'- %s'`.
+
+Also scan the diff for user-visible changes:
+- New HA entities? (new `name: "..."` lines under `sensor:`, `binary_sensor:`, `number:`, etc.)
+- Removed entities?
+- New configurable parameters? (new `number:` entries)
+
+Output a drafted release-notes block:
+```markdown
+## v<version>
+
+### Changes
+<bulleted list from git log>
+
+### User-visible
+- New/removed HA entities
+- New/removed config parameters
+- Behavior changes
+```
+
+Save to `/tmp/release-notes-<version>.md` for use in step 10.
+
+## Step 8 — Release commit
+
+Stage ALL release artifacts:
+```bash
+git add \
+  src/water-softener-<variant>-webinstall.yaml \        # for each variant
+  src/water-softener-<variant>-core.yaml \              # for each variant (if header was bumped)
+  docs/water-softener-monitor-<variant>-v<version>.bin \ # for each variant
+  docs/manifest-<variant>.json                          # for each variant
+git diff --staged --stat
+```
+
+Commit with auto-generated message:
+```
+Release <version> - <one-line summary from release notes>
+
+<release notes body>
+```
+
+If dry-run: stop here, print what would happen.
+
+## Step 9 — Tags
+
+```bash
+git tag -a <version> -m "Release <version>"
+git tag -f latest        # force-move (this is the mutable release pointer)
+```
+
+**Master-direct only.** On a feature branch, skip tag creation — tags are applied after merge.
+
+## Step 10 — Push to origin
+
+```bash
+git push origin <current-branch>
+git push origin <version>        # new annotated tag
+git push origin latest --force   # move the 'latest' pointer
+```
+
+**HTTPS credential fallback:** if `git push origin ...` fails with credential error (`Device not configured`, `could not read Username`, or similar), retry with explicit SSH URL:
+```bash
+git push git@github.com:rmaher001/water-softener-monitor.git <ref>
+```
+
+Do NOT change the stored remote. This is a one-shot fallback.
+
+## Step 11 — Publish GitHub Release
+
+```bash
+gh release create <version> \
+  --title "v<version>" \
+  --notes-file /tmp/release-notes-<version>.md \
+  --verify-tag
+```
+
+If `gh` auth fails: skill stops here with a clear "your gh token is expired — run `gh auth login`". The git tag is still pushed, so release can be created manually later.
+
+## Step 12 — Verify GitHub Pages deploy
+
+```bash
+sleep 10  # give Actions a moment to register the push
+gh run list --workflow=pages.yml --limit 1 --json status,conclusion,databaseId --jq '.[0]'
+```
+
+If status is `in_progress`: poll every 30s up to 5 minutes using `gh run watch <id>`.
+
+On `success`: print the web installer URL (`https://rmaher001.github.io/water-softener-monitor/`).
+On `failure`: STOP with run ID + link, leave everything else in place (release is tagged/published; only Pages failed).
+
+## Step 13 — Summary report
+
+Print a final summary block:
+```
+RELEASE v<version> COMPLETE
+===========================
+✓ Tag: <version>
+✓ latest pointer moved to: <short-sha>
+✓ GitHub Pages: https://rmaher001.github.io/water-softener-monitor/
+✓ Release page: https://github.com/rmaher001/water-softener-monitor/releases/tag/<version>
+
+Binaries:
+  s3:   docs/water-softener-monitor-s3-v<version>.bin    (shasum: <hash>)
+  lite: docs/water-softener-monitor-lite-v<version>.bin  (shasum: <hash>)
+
+Next steps (user-driven — Claude does NOT flash devices):
+  - OTA update prod via ESPHome Dashboard (pulls @latest automatically)
+  - Verify firmware version reads <version>-s3 / <version>-lite in HA
+```
+
+## Notes on this project's conventions
+
+- Tags use **no `v` prefix** (e.g., `2.0.1`, not `v2.0.1`).
+- `latest` is a **mutable lightweight tag** — force-moving it is intentional, not destructive.
+- Firmware version substitution `X.Y.Z-<variant>` is the SOURCE of truth; manifest/release names use `X.Y.Z` without suffix.
+- S3 and Lite share `esphome.name: water-softener-monitor` — their compile outputs clobber each other in the build dir. Skill handles this by compiling serially and staging between.
+- **Never** run `esphome upload` or `esphome run`. `esphome compile` only. Firmware deployment is strictly user-driven per project CLAUDE.md.
+- `@latest` GitHub tag is what ESPHome Dashboard resolves for OTA — moving it is how existing devices get the update.
