@@ -190,6 +190,67 @@ switch:
       - lambda: |-
           ESP_LOGI("config", "Fast polling disabled");
 
+  # Regen Test Mode: makes CONFIRMING progress tick every 60s instead of
+  # every 3600s. Lets a bench unit validate the 6-hour confirmation + reboot
+  # persistence in ~6 minutes. Auto-disables after 30 minutes so it can't
+  # be left on by accident.
+  - platform: template
+    name: "Regen Test Mode"
+    id: regen_test_mode
+    icon: "mdi:speedometer-medium"
+    optimistic: true
+    on_turn_on:
+      - lambda: |-
+          ESP_LOGW("step", "Regen test mode ENABLED — confirmation ticks every 60s");
+      - delay: 1800s  # Auto-disable after 30 minutes
+      - switch.turn_off: regen_test_mode
+    on_turn_off:
+      - lambda: |-
+          ESP_LOGI("step", "Regen test mode disabled");
+
+# Scripts
+script:
+  # Shared CONFIRMING-state progression logic, called by both the 3600s
+  # production interval and the 60s test-mode interval. Keeps a single code
+  # path for confirmation, regardless of tick rate.
+  - id: advance_regen_confirmation
+    then:
+      - lambda: |-
+          if (id(step_state) != 1) return;
+
+          float distance = id(salt_distance_raw).state;
+          if (isnan(distance)) return;
+
+          float baseline = id(step_baseline);
+          float step_thresh = id(regen_step_threshold).state;
+
+          // Guard: if distance slipped back near baseline, abandon.
+          if (distance < baseline + step_thresh * 0.5) {
+            ESP_LOGI("step", "Tick check: step abandoned, distance %.1f < baseline %.1f + thresh/2", distance, baseline);
+            id(step_state) = 0;
+            id(step_confirm_hours) = 0;
+            return;
+          }
+
+          id(step_confirm_hours) = id(step_confirm_hours) + 1;
+          int target_hours = (int)id(regen_confirmation_hours).state;
+          ESP_LOGI("step", "Confirming regen: %d / %d %s at %.1f cm (baseline %.1f)",
+                   id(step_confirm_hours), target_hours,
+                   id(regen_test_mode).state ? "ticks [TEST]" : "hours",
+                   distance, baseline);
+
+          if (id(step_confirm_hours) >= target_hours) {
+            ESP_LOGI("step", "Regeneration confirmed! Baseline: %.1f -> %.1f cm (step %.1f, after %d ticks)",
+                     baseline, distance, distance - baseline, id(step_confirm_hours));
+            id(step_baseline) = distance;
+            id(hours_since_regen) = 0;
+            id(step_state) = 0;
+            id(step_confirm_hours) = 0;
+
+            id(regen_overdue).publish_state(false);
+            id(last_regen_sensor).publish_state(0.0);
+          }
+
 # Buttons
 button:
   - platform: template
@@ -442,13 +503,13 @@ interval:
           then:
             - component.update: salt_distance_raw
 
-  # Hourly tick: increments regen tracking counter AND drives CONFIRMING
-  # progress. Using the interval as the clock (instead of millis()) means
-  # reboots pause the 6-hour confirmation window instead of resetting it.
+  # Production hourly tick: always increments regen tracking counter.
+  # CONFIRMING progress is delegated to the advance_regen_confirmation script
+  # so the same code path is used in test mode (60s tick) and prod (3600s tick).
   - interval: 3600s
     then:
       - lambda: |-
-          // --- Regen overdue counter ---
+          // --- Regen overdue counter (always runs) ---
           if (id(hours_since_regen) < 9999) {
             id(hours_since_regen) = id(hours_since_regen) + 1;
             int overdue_hours = (int)(id(regen_overdue_days).state * 24);
@@ -458,42 +519,24 @@ interval:
               ESP_LOGW("step", "Regeneration overdue! %d hours since last detected step", id(hours_since_regen));
             }
           }
+      # Advance confirmation ONLY when not in test mode (test mode uses the
+      # 60s interval below for the same purpose).
+      - if:
+          condition:
+            lambda: 'return !id(regen_test_mode).state;'
+          then:
+            - script.execute: advance_regen_confirmation
 
-          // --- CONFIRMING progress ---
-          if (id(step_state) == 1) {
-            float distance = id(salt_distance_raw).state;
-            if (isnan(distance)) return;
-
-            float baseline = id(step_baseline);
-            float step_thresh = id(regen_step_threshold).state;
-
-            // Guard: if distance slipped back near baseline, abandon.
-            // (Usually already caught per-reading, but this is a backstop
-            // in case CONFIRMING was restored from NVS after reboot.)
-            if (distance < baseline + step_thresh * 0.5) {
-              ESP_LOGI("step", "Hourly check: step abandoned, distance %.1f < baseline %.1f + thresh/2", distance, baseline);
-              id(step_state) = 0;
-              id(step_confirm_hours) = 0;
-              return;
-            }
-
-            id(step_confirm_hours) = id(step_confirm_hours) + 1;
-            int target_hours = (int)id(regen_confirmation_hours).state;
-            ESP_LOGI("step", "Confirming regen: %d / %d hours at %.1f cm (baseline %.1f)",
-                     id(step_confirm_hours), target_hours, distance, baseline);
-
-            if (id(step_confirm_hours) >= target_hours) {
-              ESP_LOGI("step", "Regeneration confirmed! Baseline: %.1f -> %.1f cm (step %.1f, after %d hours)",
-                       baseline, distance, distance - baseline, id(step_confirm_hours));
-              id(step_baseline) = distance;
-              id(hours_since_regen) = 0;
-              id(step_state) = 0;
-              id(step_confirm_hours) = 0;
-
-              id(regen_overdue).publish_state(false);
-              id(last_regen_sensor).publish_state(0.0);
-            }
-          }
+  # Test-mode fast tick: when Regen Test Mode is ON, advance CONFIRMING
+  # progress every 60s instead of every 3600s — lets a bench unit validate
+  # the 6-hour confirmation + reboot persistence in 6 minutes.
+  - interval: 60s
+    then:
+      - if:
+          condition:
+            lambda: 'return id(regen_test_mode).state;'
+          then:
+            - script.execute: advance_regen_confirmation
 
   # Normal update interval
   - interval: 1s
