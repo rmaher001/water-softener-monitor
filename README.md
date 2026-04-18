@@ -84,21 +84,27 @@ For advanced management and customization:
 
 ## Configuration
 
-All parameters adjustable in Home Assistant (no reflashing needed):
+All parameters are adjustable in Home Assistant (no reflashing needed).
 
-- **Tank Height**: Total internal tank height in cm
-- **Full Level Distance**: Distance from sensor to "full" salt level
-- **Update Interval**: How often to poll the sensor (1-300 seconds)
-- **Thresholds**: Full, Good, Low, Critical alert levels (percentages)
+**Required — set these for your tank:**
+- **Tank Height** — total internal tank height in cm (default 100)
+- **Refill Threshold Distance** — distance at which "Refill" status triggers (default 43 cm)
+
+**Optional — defaults work well, leave them alone unless you need to tune:**
+- **Update Interval** — sensor poll rate in seconds (30–300, default 60)
+- **Regen Step Threshold** — permanent distance jump that signals a regeneration cycle completed (default 2.0 cm)
+- **Regen Confirmation Hours** — how long the step must persist before being confirmed as a regen (default 6 h)
+- **Regen Overdue Days** — days without a regen before the "Regeneration Overdue" alert fires (default 20)
+
+The regen-detection settings are optional — start with the defaults and only tune them if your softener's behavior differs (e.g. very small tanks, multiple cycles per day).
 
 **Note**: Both ATOM Lite and S3 include a web interface at http://water-softener-monitor.local (with MAC suffix) for standalone configuration.
 
-## Status Levels
+## Status
 
-- **Full**: ≥75% (default)
-- **Good**: ≥50% (default)
-- **Low**: ≥25% (default)
-- **Critical**: <10% (default)
+The salt status is reported via `text_sensor.water_softener_salt_status`:
+- **Good** — measured distance is below the refill threshold (tank has enough salt)
+- **Refill** — distance is at or above the refill threshold (time to add salt)
 
 ## Integration
 
