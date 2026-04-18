@@ -28,7 +28,14 @@ Release a new version of the water-softener firmware end-to-end. User provides t
 
 Before running, check `git branch --show-current`:
 - On `master`: master-direct release flow (build + commit + tag + push).
-- On any other branch: feature-branch flow — build + commit to branch + open PR; do NOT tag or move `latest`. Tell user to merge + re-invoke on master to finalize.
+- On any other branch: **stop and tell the user to merge first.** The project uses a no-PR workflow (Claude Code Desktop sandbox can't unlock keychain for GitHub API writes, so `gh pr create` won't work). Print:
+  ```
+  You're on branch <name>, not master.
+  The release pipeline only runs on master. To finalize:
+    git checkout master && git merge <name> && git push origin master
+  Then re-run /release <version>.
+  ```
+  Do NOT attempt `gh pr create` — it will fail with a 401 in this environment.
 
 ## Step 1 — Pre-flight safety gate (STOP on any failure)
 
@@ -195,22 +202,19 @@ git tag -f latest        # force-move (this is the mutable release pointer)
 
 **Master-direct only.** On a feature branch, skip tag creation — tags are applied after merge.
 
-## Step 10 — Push to origin
+## Step 10 — Push to origin (always via SSH)
+
+Origin is HTTPS but the stored creds are keychain-locked in Claude Code Desktop. Push via SSH URL directly every time:
 
 ```bash
-git push origin <current-branch>
-git push origin <version>        # new annotated tag
-git push origin latest --force   # move the 'latest' pointer
+git push git@github.com:rmaher001/water-softener-monitor.git master
+git push git@github.com:rmaher001/water-softener-monitor.git <version>      # new annotated tag
+git push git@github.com:rmaher001/water-softener-monitor.git latest --force # move the 'latest' pointer
 ```
 
-**HTTPS credential fallback:** if `git push origin ...` fails with credential error (`Device not configured`, `could not read Username`, or similar), retry with explicit SSH URL:
-```bash
-git push git@github.com:rmaher001/water-softener-monitor.git <ref>
-```
+Do NOT try `git push origin ...` first — it will fail with `errSecInteractionNotAllowed` and waste time. Do NOT change the stored remote either — the SSH URL is used ad-hoc.
 
-Do NOT change the stored remote. This is a one-shot fallback.
-
-## Step 11 — Publish GitHub Release
+## Step 11 — Publish GitHub Release (best-effort)
 
 ```bash
 gh release create <version> \
@@ -219,7 +223,11 @@ gh release create <version> \
   --verify-tag
 ```
 
-If `gh` auth fails: skill stops here with a clear "your gh token is expired — run `gh auth login`". The git tag is still pushed, so release can be created manually later.
+**Auth failure is expected in Claude Code Desktop** (sandbox can't unlock keychain, so token reads for API writes fail with 401). Do NOT stop the pipeline on this. Instead:
+- Print a single-line warning: `⚠ gh release create skipped (keychain-locked token). Release tag is pushed; create notes manually if needed at https://github.com/rmaher001/water-softener-monitor/releases/new?tag=<version>`
+- Continue to step 12.
+
+Read-only `gh` calls (`gh run list`, `gh run watch`) work fine — those don't need write scope.
 
 ## Step 12 — Verify GitHub Pages deploy
 
@@ -261,3 +269,5 @@ Next steps (user-driven — Claude does NOT flash devices):
 - S3 and Lite share `esphome.name: water-softener-monitor` — their compile outputs clobber each other in the build dir. Skill handles this by compiling serially and staging between.
 - **Never** run `esphome upload` or `esphome run`. `esphome compile` only. Firmware deployment is strictly user-driven per project CLAUDE.md.
 - `@latest` GitHub tag is what ESPHome Dashboard resolves for OTA — moving it is how existing devices get the update.
+- **No-PR workflow**: Claude Code Desktop can't unlock keychain, so GitHub API writes (`gh pr create`, `gh release create`) return 401. Git operations work fine via SSH. User merges feature branches into master manually before invoking this skill.
+- **SSH for all git pushes**: the origin remote is HTTPS (keychain-locked), but the SSH URL `git@github.com:rmaher001/water-softener-monitor.git` works. Skill uses SSH URL directly without modifying the stored remote.
