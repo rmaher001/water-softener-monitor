@@ -4,7 +4,7 @@
 
 substitutions:
   name: "water-softener-monitor"
-  version: "2.0.0-lite"
+  version: "2.0.1-lite"
 
 esphome:
   name: "${name}"

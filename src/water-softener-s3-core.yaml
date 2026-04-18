@@ -1,4 +1,4 @@
-# ESPHome Water Softener Salt Monitor - v2.0.0
+# ESPHome Water Softener Salt Monitor - v2.0.1
 # GitHub: https://github.com/rmaher001/water-softener-monitor
 #
 # Distance-based monitoring with step-based regeneration detection
@@ -74,12 +74,14 @@ globals:
 
   - id: step_state
     type: int
-    restore_value: no
+    restore_value: yes
     initial_value: '0'
 
-  - id: step_confirm_start
-    type: unsigned long
-    restore_value: no
+  # Hours accumulated in CONFIRMING state — driven by the 1-hour interval,
+  # so reboots pause (not reset) the 6-hour confirmation window.
+  - id: step_confirm_hours
+    type: int
+    restore_value: yes
     initial_value: '0'
 
   # Hours since last regeneration (incremented hourly, survives reboots)
@@ -210,7 +212,7 @@ button:
           id(hours_since_regen) = 0;
           id(step_baseline) = id(salt_distance_raw).state;
           id(step_state) = 0;
-          id(step_confirm_start) = 0;
+          id(step_confirm_hours) = 0;
           id(regen_overdue).publish_state(false);
           id(last_regen_sensor).publish_state(0.0);
           ESP_LOGI("step", "Manual regen mark: baseline=%.1f cm", id(step_baseline));
@@ -243,14 +245,15 @@ sensor:
       then:
         - component.update: salt_status_text
         - lambda: |-
-            // Step-based regeneration detection v2.0.0
-            // Detects permanent distance increases after regeneration (salt consumption)
+            // Step-based regeneration detection (persisted-state variant, v2.0.1)
+            // Detects permanent distance increases after regeneration (salt consumption).
+            // CONFIRMING progress is counted in whole hours by the 1-hour interval,
+            // so reboots pause the confirmation window instead of resetting it.
             float distance = id(salt_distance_raw).state;
             if (isnan(distance)) return;
 
             float baseline = id(step_baseline);
             float step_thresh = id(regen_step_threshold).state;
-            unsigned long now_ms = millis();
 
             const float REFILL_DROP_CM = 10.0;
             const float EMA_ALPHA = 0.05;
@@ -269,7 +272,7 @@ sensor:
                        baseline, distance, baseline - distance);
               id(step_baseline) = distance;
               id(step_state) = 0;
-              id(step_confirm_start) = 0;
+              id(step_confirm_hours) = 0;
               return;
             }
 
@@ -280,47 +283,23 @@ sensor:
                 id(step_baseline) = EMA_ALPHA * distance + (1.0 - EMA_ALPHA) * baseline;
               }
 
-              // Check for step increase
+              // Check for step increase -> enter CONFIRMING
               if (distance > baseline + step_thresh) {
                 id(step_state) = 1;
-                id(step_confirm_start) = now_ms;
+                id(step_confirm_hours) = 0;
                 ESP_LOGI("step", "Potential step: %.1f cm (baseline %.1f + thresh %.1f = %.1f)",
                          distance, baseline, step_thresh, baseline + step_thresh);
               }
 
             } else if (id(step_state) == 1) {
-              // CONFIRMING state: check if dropped back near baseline
+              // CONFIRMING state: if distance drops back near baseline, abandon
               if (distance < baseline + step_thresh * 0.5) {
                 ESP_LOGI("step", "Step not confirmed, returned near baseline: %.1f cm", distance);
                 id(step_state) = 0;
-                id(step_confirm_start) = 0;
-                return;
+                id(step_confirm_hours) = 0;
               }
-
-              // Check confirmation time elapsed (with millis overflow handling)
-              unsigned long elapsed_ms;
-              if (now_ms >= id(step_confirm_start)) {
-                elapsed_ms = now_ms - id(step_confirm_start);
-              } else {
-                elapsed_ms = (ULONG_MAX - id(step_confirm_start)) + now_ms + 1;
-              }
-
-              float confirm_hours = id(regen_confirmation_hours).state;
-              unsigned long confirm_ms = (unsigned long)(confirm_hours * 3600000.0);
-
-              if (elapsed_ms >= confirm_ms) {
-                // STEP CONFIRMED = regeneration detected
-                ESP_LOGI("step", "Regeneration confirmed! Baseline: %.1f -> %.1f cm (step %.1f, after %.1f hours)",
-                         baseline, distance, distance - baseline, elapsed_ms / 3600000.0);
-                id(step_baseline) = distance;
-                id(hours_since_regen) = 0;
-                id(step_state) = 0;
-                id(step_confirm_start) = 0;
-
-                // Force update of dependent sensors
-                id(regen_overdue).publish_state(false);
-                id(last_regen_sensor).publish_state(0.0);
-              }
+              // Hour-counter progression and final confirmation happen in the
+              // 1-hour interval below; nothing else to do per-reading.
             }
 
   # WiFi signal strength
@@ -463,10 +442,13 @@ interval:
           then:
             - component.update: salt_distance_raw
 
-  # Hourly increment of regen tracking counter
+  # Hourly tick: increments regen tracking counter AND drives CONFIRMING
+  # progress. Using the interval as the clock (instead of millis()) means
+  # reboots pause the 6-hour confirmation window instead of resetting it.
   - interval: 3600s
     then:
       - lambda: |-
+          // --- Regen overdue counter ---
           if (id(hours_since_regen) < 9999) {
             id(hours_since_regen) = id(hours_since_regen) + 1;
             int overdue_hours = (int)(id(regen_overdue_days).state * 24);
@@ -474,6 +456,42 @@ interval:
             if (id(hours_since_regen) >= overdue_hours) {
               id(regen_overdue).publish_state(true);
               ESP_LOGW("step", "Regeneration overdue! %d hours since last detected step", id(hours_since_regen));
+            }
+          }
+
+          // --- CONFIRMING progress ---
+          if (id(step_state) == 1) {
+            float distance = id(salt_distance_raw).state;
+            if (isnan(distance)) return;
+
+            float baseline = id(step_baseline);
+            float step_thresh = id(regen_step_threshold).state;
+
+            // Guard: if distance slipped back near baseline, abandon.
+            // (Usually already caught per-reading, but this is a backstop
+            // in case CONFIRMING was restored from NVS after reboot.)
+            if (distance < baseline + step_thresh * 0.5) {
+              ESP_LOGI("step", "Hourly check: step abandoned, distance %.1f < baseline %.1f + thresh/2", distance, baseline);
+              id(step_state) = 0;
+              id(step_confirm_hours) = 0;
+              return;
+            }
+
+            id(step_confirm_hours) = id(step_confirm_hours) + 1;
+            int target_hours = (int)id(regen_confirmation_hours).state;
+            ESP_LOGI("step", "Confirming regen: %d / %d hours at %.1f cm (baseline %.1f)",
+                     id(step_confirm_hours), target_hours, distance, baseline);
+
+            if (id(step_confirm_hours) >= target_hours) {
+              ESP_LOGI("step", "Regeneration confirmed! Baseline: %.1f -> %.1f cm (step %.1f, after %d hours)",
+                       baseline, distance, distance - baseline, id(step_confirm_hours));
+              id(step_baseline) = distance;
+              id(hours_since_regen) = 0;
+              id(step_state) = 0;
+              id(step_confirm_hours) = 0;
+
+              id(regen_overdue).publish_state(false);
+              id(last_regen_sensor).publish_state(0.0);
             }
           }
 
@@ -500,8 +518,8 @@ esphome:
       - component.update: firmware_version
       - delay: 500ms  # Wait for status to be computed
       - lambda: |-
-          ESP_LOGI("step", "Boot: baseline=%.1f cm, hours_since_regen=%d, state=%d",
-                   id(step_baseline), id(hours_since_regen), id(step_state));
+          ESP_LOGI("step", "Boot: baseline=%.1f cm, hours_since_regen=%d, state=%d, confirm_hours=%d",
+                   id(step_baseline), id(hours_since_regen), id(step_state), id(step_confirm_hours));
           // Initialize LED based on current status
           std::string status = id(last_valid_status);
           if (status == "Refill") {
