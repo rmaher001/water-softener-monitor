@@ -30,3 +30,7 @@ test-config/
 .playwright-mcp/
 CLAUDE.md
 ANALYSIS.md
+
+# Claude Code local artifacts (never commit)
+.claude/worktrees/
+.claude/settings.local.json
