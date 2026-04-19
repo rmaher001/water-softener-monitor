@@ -119,34 +119,57 @@ source ~/esphome/venv/bin/activate && esphome compile src/water-softener-<varian
 
 Wait for SUCCESS. On failure: STOP, print the last 30 lines of output.
 
-**Build-path quirk** — both S3 and Lite compile to the same output directory because they share `name: water-softener-monitor` in `esphome:`. To avoid one overwriting the other:
+**Build-path quirk** — both S3 and Lite compile to the same output directory because they share `name: water-softener-monitor` in `esphome:`. Both `firmware.factory.bin` AND `firmware.ota.bin` get overwritten by the next compile. To avoid one overwriting the other:
 1. Compile S3 first.
-2. Copy `src/.esphome/build/water-softener-monitor/.pioenvs/water-softener-monitor/firmware.factory.bin` → staging (see step 5).
+2. Copy BOTH `firmware.factory.bin` AND `firmware.ota.bin` from the build dir → staging (see step 5).
 3. THEN compile Lite.
-4. Copy Lite binary from same path → staging.
+4. Copy both Lite binaries from same path → staging.
 
 If `--variants` has only one, no conflict — just compile and copy.
 
 ## Step 5 — Stage binaries in `docs/`
 
-After each compile, copy the factory binary:
+After each compile, copy BOTH the factory bin (for web installer) AND the OTA bin (for HA update-entity OTA path, added in 2.0.2):
+
 ```bash
-cp src/.esphome/build/water-softener-monitor/.pioenvs/water-softener-monitor/firmware.factory.bin \
-   docs/water-softener-monitor-<variant>-v<version>.bin
+BUILD=src/.esphome/build/water-softener-monitor/.pioenvs/water-softener-monitor
+cp "$BUILD/firmware.factory.bin" "docs/water-softener-monitor-<variant>-v<version>.bin"
+cp "$BUILD/firmware.ota.bin"     "docs/water-softener-monitor-<variant>-v<version>.ota.bin"
 ```
 
-**Size sanity check** — compare new binary size to the previous same-variant binary in `docs/`:
+**Size sanity check** — compare new factory bin size to the previous same-variant factory bin in `docs/`:
 - If new is >20% smaller or >20% larger: print a WARNING and ask user to acknowledge before continuing.
 - Otherwise continue silently.
 
-Log the `shasum` of each new binary for audit.
+**Compute MD5 of the OTA bin** (required for the manifest `ota.md5` field in Step 6):
+
+```bash
+OTA_MD5=$(md5 -q "docs/water-softener-monitor-<variant>-v<version>.ota.bin" 2>/dev/null \
+       || md5sum "docs/water-softener-monitor-<variant>-v<version>.ota.bin" | awk '{print $1}')
+```
+
+Log both `shasum` (for audit of the factory bin) and `md5` (persisted in the manifest for OTA verification) for each variant.
 
 ## Step 6 — Update manifest JSON files
 
-For each variant in `--variants`:
-- `docs/manifest-<variant>.json`: update `version` field to `<version>` and `builds[0].parts[0].path` to `water-softener-monitor-<variant>-v<version>.bin`.
+For each variant in `--variants`, extend `docs/manifest-<variant>.json`:
 
-Preserve formatting.
+1. Top-level `"version": "<version>"`.
+2. `builds[0].parts[0].path` → `water-softener-monitor-<variant>-v<version>.bin` (web installer — unchanged).
+3. `builds[0].ota` block (added/updated — drives HA update-entity notifications):
+
+```json
+"ota": {
+  "md5": "<OTA_MD5 from step 5>",
+  "path": "water-softener-monitor-<variant>-v<version>.ota.bin",
+  "release_url": "https://github.com/rmaher001/water-softener-monitor/releases/tag/<version>",
+  "summary": "<first line of the release notes summary from step 7 — one sentence>"
+}
+```
+
+Preserve all other fields (`chipFamily`, `improv`, top-level metadata). If the `ota` block doesn't exist yet (pre-2.0.2 manifests), add it alongside `parts`.
+
+**Why both `parts` and `ota` coexist**: `parts` is used by the ESP-Web-Tools web installer for fresh flashing (factory bin). `ota` is used by ESPHome's `update.http_request` platform for in-place OTA upgrades (OTA bin). Both schemas fit in the same builds[0] object.
 
 ## Step 7 — Release notes
 
@@ -252,13 +275,19 @@ RELEASE v<version> COMPLETE
 ✓ GitHub Pages: https://rmaher001.github.io/water-softener-monitor/
 ✓ Release page: https://github.com/rmaher001/water-softener-monitor/releases/tag/<version>
 
-Binaries:
+Binaries (factory — web installer):
   s3:   docs/water-softener-monitor-s3-v<version>.bin    (shasum: <hash>)
   lite: docs/water-softener-monitor-lite-v<version>.bin  (shasum: <hash>)
 
+OTA binaries (HA update-entity path, 2.0.2+):
+  s3:   docs/water-softener-monitor-s3-v<version>.ota.bin    (md5: <hash>)
+  lite: docs/water-softener-monitor-lite-v<version>.ota.bin  (md5: <hash>)
+
 Next steps (user-driven — Claude does NOT flash devices):
-  - OTA update prod via ESPHome Dashboard (pulls @latest automatically)
-  - Verify firmware version reads <version>-s3 / <version>-lite in HA
+  - Devices on 2.0.2+ will auto-surface the new version as an HA update
+    entity within 6 hours of the next poll.
+  - Prod can also be OTA'd via ESPHome Dashboard as before.
+  - Verify firmware version reads <version>-s3 / <version>-lite in HA.
 ```
 
 ## Notes on this project's conventions
@@ -271,3 +300,5 @@ Next steps (user-driven — Claude does NOT flash devices):
 - `@latest` GitHub tag is what ESPHome Dashboard resolves for OTA — moving it is how existing devices get the update.
 - **No-PR workflow**: Claude Code Desktop can't unlock keychain, so GitHub API writes (`gh pr create`, `gh release create`) return 401. Git operations work fine via SSH. User merges feature branches into master manually before invoking this skill.
 - **SSH for all git pushes**: the origin remote is HTTPS (keychain-locked), but the SSH URL `git@github.com:rmaher001/water-softener-monitor.git` works. Skill uses SSH URL directly without modifying the stored remote.
+- **Two binaries per variant per release** (2.0.2+): `firmware.factory.bin` for fresh web installs, `firmware.ota.bin` for in-place HA update-entity OTAs. Both compiled in a single `esphome compile` pass; both must be published to `docs/` with versioned filenames. Manifest's `builds[0].parts[]` points at the factory bin; `builds[0].ota.path` points at the OTA bin.
+- **Manifest schema** combines ESP-Web-Tools (for web installer) and ESPHome `update.http_request` (for HA update entity) formats in the same JSON. `parts[]` = factory bin for fresh installs; `ota{}` = OTA bin + MD5 + release_url + summary for in-place OTA.

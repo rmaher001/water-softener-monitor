@@ -4,7 +4,7 @@
 
 substitutions:
   name: "water-softener-monitor"
-  version: "2.0.1-lite"
+  version: "2.0.2-lite"
 
 esphome:
   name: "${name}"
@@ -27,9 +27,23 @@ packages:
 # API for Home Assistant integration
 api:
 
-# OTA updates - no password for easy management
+# HTTP client component (required by update.http_request)
+http_request:
+
+# OTA updates
 ota:
-  - platform: esphome
+  - platform: esphome            # For ESPHome Dashboard OTA (unchanged)
+  - platform: http_request       # For HA update-entity OTA (new in 2.0.2)
+
+# Firmware update notifications — device polls our manifest on GitHub Pages,
+# exposes an HA update entity that fires proper update notifications when a
+# new version is published. Click "Install" in HA triggers OTA from the
+# URL in the manifest.
+update:
+  - platform: http_request
+    name: "Firmware Update"
+    source: https://rmaher001.github.io/water-softener-monitor/manifest-lite.json
+    update_interval: 6h
 
 wifi:
   power_save_mode: none
