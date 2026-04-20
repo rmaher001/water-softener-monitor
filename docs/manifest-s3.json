@@ -1,6 +1,6 @@
 {
   "name": "Water Softener Monitor (ATOM S3)",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "home_assistant_domain": "esphome",
   "new_install_prompt_erase": true,
   "new_install_improv_wait_time": 0,
@@ -9,8 +9,14 @@
       "chipFamily": "ESP32-S3",
       "improv": true,
       "parts": [
-        { "path": "water-softener-monitor-s3-v2.0.1.bin", "offset": 0 }
-      ]
+        { "path": "water-softener-monitor-s3-v2.0.2.bin", "offset": 0 }
+      ],
+      "ota": {
+        "md5": "3b4b0bfc3580ab4220f82bbd079b7da9",
+        "path": "water-softener-monitor-s3-v2.0.2.ota.bin",
+        "release_url": "https://github.com/rmaher001/water-softener-monitor/releases/tag/2.0.2",
+        "summary": "HA-native firmware update notifications"
+      }
     }
   ]
 }

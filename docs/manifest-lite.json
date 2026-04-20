@@ -1,6 +1,6 @@
 {
   "name": "Water Softener Monitor (ATOM Lite)",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "home_assistant_domain": "esphome",
   "new_install_prompt_erase": true,
   "new_install_improv_wait_time": 0,
@@ -9,8 +9,14 @@
       "chipFamily": "ESP32",
       "improv": true,
       "parts": [
-        { "path": "water-softener-monitor-lite-v2.0.1.bin", "offset": 0 }
-      ]
+        { "path": "water-softener-monitor-lite-v2.0.2.bin", "offset": 0 }
+      ],
+      "ota": {
+        "md5": "33c1206c95cca5b9cc00d3fbcec27ffd",
+        "path": "water-softener-monitor-lite-v2.0.2.ota.bin",
+        "release_url": "https://github.com/rmaher001/water-softener-monitor/releases/tag/2.0.2",
+        "summary": "HA-native firmware update notifications"
+      }
     }
   ]
 }
