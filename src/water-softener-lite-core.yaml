@@ -1,4 +1,4 @@
-# ESPHome Water Softener Salt Monitor - v2.0.3 (ATOM Lite)
+# ESPHome Water Softener Salt Monitor - v2.0.4 (ATOM Lite)
 # GitHub: https://github.com/rmaher001/water-softener-monitor
 #
 # Distance-based monitoring with step-based regeneration detection
@@ -29,6 +29,12 @@ web_server:
 
 # Enable Improv via Serial for web installer WiFi configuration
 improv_serial:
+
+# Short BLE advertising name so the Improv service UUID fits in the 31-byte
+# ADV packet. Without this, device name "water-softener-monitor-<mac>" (~29 bytes)
+# pushes the Improv UUID out of the broadcast and discovery apps can't find it.
+esp32_ble:
+  name: "WS-Setup"
 
 # Enable BLE Improv for wireless WiFi configuration
 esp32_improv:
