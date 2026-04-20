@@ -1,6 +1,6 @@
 {
   "name": "Water Softener Monitor (ATOM Lite)",
-  "version": "2.0.4-lite",
+  "version": "2.0.5-lite",
   "home_assistant_domain": "esphome",
   "new_install_prompt_erase": true,
   "new_install_improv_wait_time": 0,
@@ -9,13 +9,13 @@
       "chipFamily": "ESP32",
       "improv": true,
       "parts": [
-        { "path": "water-softener-monitor-lite-v2.0.4.bin", "offset": 0 }
+        { "path": "water-softener-monitor-lite-v2.0.5.bin", "offset": 0 }
       ],
       "ota": {
-        "md5": "c041c71f85ed6c807915fe50c2aa86db",
-        "path": "water-softener-monitor-lite-v2.0.4.ota.bin",
-        "release_url": "https://github.com/rmaher001/water-softener-monitor/releases/tag/2.0.4",
-        "summary": "Fix BLE advertisement truncation blocking Improv Wi-Fi discovery"
+        "md5": "83e7422d4a69c95e794016b9860a59fd",
+        "path": "water-softener-monitor-lite-v2.0.5.ota.bin",
+        "release_url": "https://github.com/rmaher001/water-softener-monitor/releases/tag/2.0.5",
+        "summary": "Fix Firmware Version sensor reading Unknown on ATOM Lite"
       }
     }
   ]

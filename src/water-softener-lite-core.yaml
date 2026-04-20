@@ -1,4 +1,4 @@
-# ESPHome Water Softener Salt Monitor - v2.0.4 (ATOM Lite)
+# ESPHome Water Softener Salt Monitor - v2.0.5 (ATOM Lite)
 # GitHub: https://github.com/rmaher001/water-softener-monitor
 #
 # Distance-based monitoring with step-based regeneration detection
@@ -452,6 +452,7 @@ text_sensor:
 
   - platform: template
     name: "Firmware Version"
+    id: firmware_version
     icon: "mdi:chip"
     update_interval: never
     lambda: |-
@@ -523,6 +524,7 @@ esphome:
     then:
       - delay: 2s  # Wait for sensor to stabilize
       - component.update: salt_distance_raw
+      - component.update: firmware_version
       - delay: 500ms
       - lambda: |-
           ESP_LOGI("step", "Boot: baseline=%.1f cm, hours_since_regen=%d, state=%d, confirm_hours=%d",

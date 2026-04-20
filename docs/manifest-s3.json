@@ -1,6 +1,6 @@
 {
   "name": "Water Softener Monitor (ATOM S3)",
-  "version": "2.0.4-s3",
+  "version": "2.0.5-s3",
   "home_assistant_domain": "esphome",
   "new_install_prompt_erase": true,
   "new_install_improv_wait_time": 0,
@@ -9,13 +9,13 @@
       "chipFamily": "ESP32-S3",
       "improv": true,
       "parts": [
-        { "path": "water-softener-monitor-s3-v2.0.4.bin", "offset": 0 }
+        { "path": "water-softener-monitor-s3-v2.0.5.bin", "offset": 0 }
       ],
       "ota": {
-        "md5": "71911d58484073443890469db0ff326e",
-        "path": "water-softener-monitor-s3-v2.0.4.ota.bin",
-        "release_url": "https://github.com/rmaher001/water-softener-monitor/releases/tag/2.0.4",
-        "summary": "Fix BLE advertisement truncation blocking Improv Wi-Fi discovery"
+        "md5": "4cc9d00d189edb5cffc704ef041e18c2",
+        "path": "water-softener-monitor-s3-v2.0.5.ota.bin",
+        "release_url": "https://github.com/rmaher001/water-softener-monitor/releases/tag/2.0.5",
+        "summary": "Fix Firmware Version sensor on Lite variant (no S3 changes)"
       }
     }
   ]
