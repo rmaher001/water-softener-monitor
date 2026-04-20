@@ -154,7 +154,7 @@ Log both `shasum` (for audit of the factory bin) and `md5` (persisted in the man
 
 For each variant in `--variants`, extend `docs/manifest-<variant>.json`:
 
-1. Top-level `"version": "<version>"`.
+1. Top-level `"version": "<version>-<variant>"` — **must include the variant suffix** (e.g. `"2.0.3-s3"`, `"2.0.3-lite"`). This matches the device's `project.version` exactly so `update.http_request` sees `installed == latest` and doesn't flag a phantom update. Learned the hard way in 2.0.2: manifest `"2.0.2"` vs device `"2.0.2-s3"` triggered an infinite "Install → fails because post-install version mismatch" loop.
 2. `builds[0].parts[0].path` → `water-softener-monitor-<variant>-v<version>.bin` (web installer — unchanged).
 3. `builds[0].ota` block (added/updated — drives HA update-entity notifications):
 

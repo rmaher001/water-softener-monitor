@@ -1,6 +1,6 @@
 {
   "name": "Water Softener Monitor (ATOM S3)",
-  "version": "2.0.2",
+  "version": "2.0.2-s3",
   "home_assistant_domain": "esphome",
   "new_install_prompt_erase": true,
   "new_install_improv_wait_time": 0,
