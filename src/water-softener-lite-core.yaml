@@ -1,4 +1,4 @@
-# ESPHome Water Softener Salt Monitor - v2.0.5 (ATOM Lite)
+# ESPHome Water Softener Salt Monitor - v2.1.0 (ATOM Lite)
 # GitHub: https://github.com/rmaher001/water-softener-monitor
 #
 # Distance-based monitoring with step-based regeneration detection
@@ -64,9 +64,14 @@ globals:
     restore_value: yes
     initial_value: '0'
 
-  # Hours accumulated in CONFIRMING state — driven by the 1-hour interval,
-  # so reboots pause (not reset) the 6-hour confirmation window.
-  - id: step_confirm_hours
+  # Samples accumulated during CONFIRMING (v2.1.0: per-reading accumulator,
+  # not hourly ticks). Reboots pause the window — both counters survive.
+  - id: confirm_above_count
+    type: int
+    restore_value: yes
+    initial_value: '0'
+
+  - id: confirm_sample_count
     type: int
     restore_value: yes
     initial_value: '0'
@@ -150,6 +155,20 @@ number:
     mode: box
 
   - platform: template
+    name: "Regen Confirm Percent"
+    id: regen_confirm_percent
+    entity_category: "config"
+    optimistic: true
+    restore_value: true
+    initial_value: 75
+    min_value: 50
+    max_value: 95
+    step: 5
+    unit_of_measurement: "%"
+    icon: "mdi:percent"
+    mode: box
+
+  - platform: template
     name: "Regen Overdue Days"
     id: regen_overdue_days
     entity_category: "config"
@@ -177,67 +196,6 @@ switch:
       - lambda: |-
           ESP_LOGI("config", "Fast polling disabled");
 
-  # Regen Test Mode: makes CONFIRMING progress tick every 60s instead of
-  # every 3600s. Lets a bench unit validate the 6-hour confirmation + reboot
-  # persistence in ~6 minutes. Auto-disables after 30 minutes so it can't
-  # be left on by accident.
-  - platform: template
-    name: "Regen Test Mode"
-    id: regen_test_mode
-    icon: "mdi:speedometer-medium"
-    optimistic: true
-    on_turn_on:
-      - lambda: |-
-          ESP_LOGW("step", "Regen test mode ENABLED — confirmation ticks every 60s");
-      - delay: 1800s  # Auto-disable after 30 minutes
-      - switch.turn_off: regen_test_mode
-    on_turn_off:
-      - lambda: |-
-          ESP_LOGI("step", "Regen test mode disabled");
-
-# Scripts
-script:
-  # Shared CONFIRMING-state progression logic, called by both the 3600s
-  # production interval and the 60s test-mode interval. Keeps a single code
-  # path for confirmation, regardless of tick rate.
-  - id: advance_regen_confirmation
-    then:
-      - lambda: |-
-          if (id(step_state) != 1) return;
-
-          float distance = id(salt_distance_raw).state;
-          if (isnan(distance)) return;
-
-          float baseline = id(step_baseline);
-          float step_thresh = id(regen_step_threshold).state;
-
-          // Guard: if distance slipped back near baseline, abandon.
-          if (distance < baseline + step_thresh * 0.5) {
-            ESP_LOGI("step", "Tick check: step abandoned, distance %.1f < baseline %.1f + thresh/2", distance, baseline);
-            id(step_state) = 0;
-            id(step_confirm_hours) = 0;
-            return;
-          }
-
-          id(step_confirm_hours) = id(step_confirm_hours) + 1;
-          int target_hours = (int)id(regen_confirmation_hours).state;
-          ESP_LOGI("step", "Confirming regen: %d / %d %s at %.1f cm (baseline %.1f)",
-                   id(step_confirm_hours), target_hours,
-                   id(regen_test_mode).state ? "ticks [TEST]" : "hours",
-                   distance, baseline);
-
-          if (id(step_confirm_hours) >= target_hours) {
-            ESP_LOGI("step", "Regeneration confirmed! Baseline: %.1f -> %.1f cm (step %.1f, after %d ticks)",
-                     baseline, distance, distance - baseline, id(step_confirm_hours));
-            id(step_baseline) = distance;
-            id(hours_since_regen) = 0;
-            id(step_state) = 0;
-            id(step_confirm_hours) = 0;
-
-            id(regen_overdue).publish_state(false);
-            id(last_regen_sensor).publish_state(0.0);
-          }
-
 # Buttons
 button:
   - platform: template
@@ -260,7 +218,8 @@ button:
           id(hours_since_regen) = 0;
           id(step_baseline) = id(salt_distance_raw).state;
           id(step_state) = 0;
-          id(step_confirm_hours) = 0;
+          id(confirm_above_count) = 0;
+          id(confirm_sample_count) = 0;
           id(regen_overdue).publish_state(false);
           id(last_regen_sensor).publish_state(0.0);
           ESP_LOGI("step", "Manual regen mark: baseline=%.1f cm", id(step_baseline));
@@ -293,10 +252,11 @@ sensor:
       then:
         - component.update: salt_status_text
         - lambda: |-
-            // Step-based regeneration detection (persisted-state variant, v2.0.1)
-            // Detects permanent distance increases after regeneration (salt consumption).
-            // CONFIRMING progress is counted in whole hours by the 1-hour interval,
-            // so reboots pause the confirmation window instead of resetting it.
+            // Step-based regeneration detection (v2.1.0: sample-count confirmation)
+            // Confirmation runs per-reading: accumulate samples during the window,
+            // early-exit when the required fraction of samples above threshold is hit,
+            // discard at end-of-window if never hit. No abandon check — false starts
+            // simply dilute the above-count and expire naturally.
             float distance = id(salt_distance_raw).state;
             if (isnan(distance)) return;
 
@@ -306,6 +266,7 @@ sensor:
             const float REFILL_DROP_CM = 10.0;
             const float EMA_ALPHA = 0.05;
             const float NOISE_BAND_CM = 1.5;
+            const int   CREDIT_MIN_SAMPLES = 15;  // min evidence to credit regen on refill interrupt
 
             // === INITIALIZE BASELINE ON FIRST VALID READING ===
             if (baseline <= 0.0) {
@@ -316,11 +277,25 @@ sensor:
 
             // === SALT REFILL DETECTION (large drop) ===
             if (distance < baseline - REFILL_DROP_CM) {
+              // If refill interrupts a CONFIRMING window with enough *affirmative*
+              // evidence, credit the pending regen before resetting state.
+              // Requires both: minimum samples collected AND at least half of them
+              // actually above threshold (so noise-borderline windows don't credit).
+              if (id(step_state) == 1
+                  && id(confirm_sample_count) >= CREDIT_MIN_SAMPLES
+                  && id(confirm_above_count) >= CREDIT_MIN_SAMPLES / 2) {
+                id(hours_since_regen) = 0;
+                id(regen_overdue).publish_state(false);
+                id(last_regen_sensor).publish_state(0.0);
+                ESP_LOGI("step", "Refill during CONFIRMING — crediting pending regen (samples=%d, above=%d)",
+                         id(confirm_sample_count), id(confirm_above_count));
+              }
               ESP_LOGI("step", "Salt refill detected: %.1f -> %.1f cm (drop %.1f)",
                        baseline, distance, baseline - distance);
               id(step_baseline) = distance;
               id(step_state) = 0;
-              id(step_confirm_hours) = 0;
+              id(confirm_above_count) = 0;
+              id(confirm_sample_count) = 0;
               return;
             }
 
@@ -334,20 +309,52 @@ sensor:
               // Check for step increase -> enter CONFIRMING
               if (distance > baseline + step_thresh) {
                 id(step_state) = 1;
-                id(step_confirm_hours) = 0;
+                id(confirm_above_count) = 0;
+                id(confirm_sample_count) = 0;
                 ESP_LOGI("step", "Potential step: %.1f cm (baseline %.1f + thresh %.1f = %.1f)",
                          distance, baseline, step_thresh, baseline + step_thresh);
               }
 
             } else if (id(step_state) == 1) {
-              // CONFIRMING state: if distance drops back near baseline, abandon
-              if (distance < baseline + step_thresh * 0.5) {
-                ESP_LOGI("step", "Step not confirmed, returned near baseline: %.1f cm", distance);
-                id(step_state) = 0;
-                id(step_confirm_hours) = 0;
+              // CONFIRMING state: accumulate sample counts; decide per-reading.
+              id(confirm_sample_count) = id(confirm_sample_count) + 1;
+              if (distance > baseline + step_thresh) {
+                id(confirm_above_count) = id(confirm_above_count) + 1;
               }
-              // Hour-counter progression and final confirmation happen in the
-              // 1-hour interval below; nothing else to do per-reading.
+
+              int target_hours = (int)id(regen_confirmation_hours).state;
+              int update_sec = (int)id(update_interval_seconds).state;
+              if (update_sec < 1) update_sec = 60;  // guard against zero
+              int window_samples = (target_hours * 3600) / update_sec;
+              if (window_samples < 1) window_samples = 1;
+              int required = (window_samples * (int)id(regen_confirm_percent).state) / 100;
+              if (required < 1) required = 1;
+
+              // Early confirm: hit the required count before window expires.
+              if (id(confirm_above_count) >= required) {
+                ESP_LOGI("step", "Regen confirmed! %d/%d samples above threshold after %d samples (window=%d, %d%%). "
+                                  "Baseline %.1f -> %.1f cm",
+                         id(confirm_above_count), required, id(confirm_sample_count),
+                         window_samples, (int)id(regen_confirm_percent).state,
+                         baseline, distance);
+                id(step_baseline) = distance;
+                id(hours_since_regen) = 0;
+                id(step_state) = 0;
+                id(confirm_above_count) = 0;
+                id(confirm_sample_count) = 0;
+                id(regen_overdue).publish_state(false);
+                id(last_regen_sensor).publish_state(0.0);
+                return;
+              }
+
+              // Window expired without reaching required count -> discard
+              if (id(confirm_sample_count) >= window_samples) {
+                ESP_LOGI("step", "Regen NOT confirmed: %d/%d samples above threshold in full window (required %d). Discarding.",
+                         id(confirm_above_count), id(confirm_sample_count), required);
+                id(step_state) = 0;
+                id(confirm_above_count) = 0;
+                id(confirm_sample_count) = 0;
+              }
             }
 
   # WiFi signal strength
@@ -469,13 +476,12 @@ interval:
           then:
             - component.update: salt_distance_raw
 
-  # Production hourly tick: always increments regen tracking counter.
-  # CONFIRMING progress is delegated to the advance_regen_confirmation script
-  # so the same code path is used in test mode (60s tick) and prod (3600s tick).
+  # Hourly tick: increments the days-since-regen counter and publishes
+  # overdue state. Confirmation progress is now per-reading (not hourly),
+  # so this interval no longer participates in the detection state machine.
   - interval: 3600s
     then:
       - lambda: |-
-          // --- Regen overdue counter (always runs) ---
           if (id(hours_since_regen) < 9999) {
             id(hours_since_regen) = id(hours_since_regen) + 1;
             int overdue_hours = (int)(id(regen_overdue_days).state * 24);
@@ -485,24 +491,6 @@ interval:
               ESP_LOGW("step", "Regeneration overdue! %d hours since last detected step", id(hours_since_regen));
             }
           }
-      # Advance confirmation ONLY when not in test mode (test mode uses the
-      # 60s interval below for the same purpose).
-      - if:
-          condition:
-            lambda: 'return !id(regen_test_mode).state;'
-          then:
-            - script.execute: advance_regen_confirmation
-
-  # Test-mode fast tick: when Regen Test Mode is ON, advance CONFIRMING
-  # progress every 60s instead of every 3600s — lets a bench unit validate
-  # the 6-hour confirmation + reboot persistence in 6 minutes.
-  - interval: 60s
-    then:
-      - if:
-          condition:
-            lambda: 'return id(regen_test_mode).state;'
-          then:
-            - script.execute: advance_regen_confirmation
 
   # Normal update interval
   - interval: 1s
@@ -527,5 +515,6 @@ esphome:
       - component.update: firmware_version
       - delay: 500ms
       - lambda: |-
-          ESP_LOGI("step", "Boot: baseline=%.1f cm, hours_since_regen=%d, state=%d, confirm_hours=%d",
-                   id(step_baseline), id(hours_since_regen), id(step_state), id(step_confirm_hours));
+          ESP_LOGI("step", "Boot: baseline=%.1f cm, hours_since_regen=%d, state=%d, confirm_above=%d, confirm_samples=%d",
+                   id(step_baseline), id(hours_since_regen), id(step_state),
+                   id(confirm_above_count), id(confirm_sample_count));

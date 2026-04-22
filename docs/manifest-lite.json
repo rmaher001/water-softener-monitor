@@ -1,6 +1,6 @@
 {
   "name": "Water Softener Monitor (ATOM Lite)",
-  "version": "2.0.5-lite",
+  "version": "2.1.0-lite",
   "home_assistant_domain": "esphome",
   "new_install_prompt_erase": true,
   "new_install_improv_wait_time": 0,
@@ -9,13 +9,13 @@
       "chipFamily": "ESP32",
       "improv": true,
       "parts": [
-        { "path": "water-softener-monitor-lite-v2.0.5.bin", "offset": 0 }
+        { "path": "water-softener-monitor-lite-v2.1.0.bin", "offset": 0 }
       ],
       "ota": {
-        "md5": "83e7422d4a69c95e794016b9860a59fd",
-        "path": "water-softener-monitor-lite-v2.0.5.ota.bin",
-        "release_url": "https://github.com/rmaher001/water-softener-monitor/releases/tag/2.0.5",
-        "summary": "Fix Firmware Version sensor reading Unknown on ATOM Lite"
+        "md5": "4cbfcb6776776f736066fec55738d3c8",
+        "path": "water-softener-monitor-lite-v2.1.0.ota.bin",
+        "release_url": "https://github.com/rmaher001/water-softener-monitor/releases/tag/2.1.0",
+        "summary": "Rewrite regen detection with sample-count confirmation; credits pending regen on refill interrupt; new Regen Confirm Percent tunable"
       }
     }
   ]
