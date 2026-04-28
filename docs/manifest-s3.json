@@ -1,6 +1,6 @@
 {
   "name": "Water Softener Monitor (ATOM S3)",
-  "version": "2.1.0-s3",
+  "version": "3.0.0-s3",
   "home_assistant_domain": "esphome",
   "new_install_prompt_erase": true,
   "new_install_improv_wait_time": 0,
@@ -9,13 +9,13 @@
       "chipFamily": "ESP32-S3",
       "improv": true,
       "parts": [
-        { "path": "water-softener-monitor-s3-v2.1.0.bin", "offset": 0 }
+        { "path": "water-softener-monitor-s3-v3.0.0.bin", "offset": 0 }
       ],
       "ota": {
-        "md5": "c74af26e6af664eab1056304846b852e",
-        "path": "water-softener-monitor-s3-v2.1.0.ota.bin",
-        "release_url": "https://github.com/rmaher001/water-softener-monitor/releases/tag/2.1.0",
-        "summary": "Rewrite regen detection with sample-count confirmation; credits pending regen on refill interrupt; new Regen Confirm Percent tunable"
+        "md5": "c242827866f6a780b9193ab6e855b03d",
+        "path": "water-softener-monitor-s3-v3.0.0.ota.bin",
+        "release_url": "https://github.com/rmaher001/water-softener-monitor/releases/tag/3.0.0",
+        "summary": "Two-window comparison detection: median of recent 30 samples vs median of 30 samples taken regen_confirmation_hours ago. Replaces broken EMA-baseline algorithm. Reuses existing tunables; no new HA entities."
       }
     }
   ]

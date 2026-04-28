@@ -1,8 +1,10 @@
-# ESPHome Water Softener Salt Monitor - v2.1.0 (ATOM Lite)
+# ESPHome Water Softener Salt Monitor - v3.0.0 (ATOM Lite)
 # GitHub: https://github.com/rmaher001/water-softener-monitor
 #
-# Distance-based monitoring with step-based regeneration detection
-# Detects permanent distance increases after regeneration cycles (salt consumption)
+# Two-window comparison regeneration detection.
+# Compares median of recent 30-sample window against median of 30-sample window
+# from `regen_confirmation_hours` ago. If delta >= regen_step_threshold,
+# a regeneration step is confirmed.
 # All advanced analytics handled in Home Assistant
 
 # ATOM Lite board configuration
@@ -53,34 +55,36 @@ globals:
     restore_value: yes
     initial_value: '"Checking..."'
 
-  # Step-based regeneration detection
-  - id: step_baseline
-    type: float
-    restore_value: yes
-    initial_value: '0.0'
-
-  - id: step_state
-    type: int
-    restore_value: yes
-    initial_value: '0'
-
-  # Samples accumulated during CONFIRMING (v2.1.0: per-reading accumulator,
-  # not hourly ticks). Reboots pause the window — both counters survive.
-  - id: confirm_above_count
-    type: int
-    restore_value: yes
-    initial_value: '0'
-
-  - id: confirm_sample_count
-    type: int
-    restore_value: yes
-    initial_value: '0'
-
   # Hours since last regeneration (incremented hourly, survives reboots)
   - id: hours_since_regen
     type: int
     restore_value: yes
     initial_value: '9999'
+
+  # Ring buffer of recent distance readings in 0.1 cm units (RAM-only).
+  # Sized to handle 24h lookback @ 30s interval (2880) + 30 recent + 30 old + slack.
+  - id: dist_buffer
+    type: std::vector<int16_t>
+    restore_value: no
+    initial_value: ''
+
+  - id: dist_buffer_head
+    type: int
+    restore_value: no
+    initial_value: '0'
+
+  - id: dist_buffer_count
+    type: int
+    restore_value: no
+    initial_value: '0'
+
+  # Cooldown counter (samples remaining until next detection allowed).
+  # Set after a confirmed regen so the same step can't re-trigger as the
+  # old window shifts past it. RAM-only — a reboot resets cooldown to 0.
+  - id: cooldown_samples
+    type: int
+    restore_value: no
+    initial_value: '0'
 
 # Configurable settings
 number:
@@ -215,14 +219,18 @@ button:
     icon: "mdi:water-sync"
     on_press:
       - lambda: |-
+          // Suppress auto-detection from re-firing on the same step the user
+          // is acknowledging. Cooldown matches the auto-detection cooldown so
+          // any pending step has time to roll out of the old window.
+          int update_sec = (int)id(update_interval_seconds).state;
+          if (update_sec < 1) update_sec = 60;
+          int lookback_hours = (int)id(regen_confirmation_hours).state;
+          int lookback_offset = (lookback_hours * 3600) / update_sec;
+          id(cooldown_samples) = lookback_offset + 30;  // 30 = RECENT_WINDOW
           id(hours_since_regen) = 0;
-          id(step_baseline) = id(salt_distance_raw).state;
-          id(step_state) = 0;
-          id(confirm_above_count) = 0;
-          id(confirm_sample_count) = 0;
           id(regen_overdue).publish_state(false);
           id(last_regen_sensor).publish_state(0.0);
-          ESP_LOGI("step", "Manual regen mark: baseline=%.1f cm", id(step_baseline));
+          ESP_LOGI("regen", "Manual regen mark (cooldown %d samples)", id(cooldown_samples));
 
   - platform: restart
     name: "Restart"
@@ -252,109 +260,116 @@ sensor:
       then:
         - component.update: salt_status_text
         - lambda: |-
-            // Step-based regeneration detection (v2.1.0: sample-count confirmation)
-            // Confirmation runs per-reading: accumulate samples during the window,
-            // early-exit when the required fraction of samples above threshold is hit,
-            // discard at end-of-window if never hit. No abandon check — false starts
-            // simply dilute the above-count and expire naturally.
+            // Two-window comparison regen detection (v3.0.0).
+            // Median of last RECENT_WINDOW samples vs median of OLD_WINDOW samples
+            // taken `regen_confirmation_hours` ago. If delta >= regen_step_threshold
+            // AND at least regen_confirm_percent of recent samples are individually
+            // above (old_med + threshold), a regen step is confirmed.
+            static const int RECENT_WINDOW = 30;
+            static const int OLD_WINDOW = 30;
+            static const int MAX_BUFFER = 3000;  // 24h @ 30s + slack
+
             float distance = id(salt_distance_raw).state;
             if (isnan(distance)) return;
 
-            float baseline = id(step_baseline);
+            // Lazy-initialize the ring buffer to MAX_BUFFER capacity
+            if (id(dist_buffer).empty()) {
+              id(dist_buffer).resize(MAX_BUFFER, 0);
+              id(dist_buffer_head) = 0;
+              id(dist_buffer_count) = 0;
+              ESP_LOGI("regen", "Distance buffer initialized (capacity %d samples)", MAX_BUFFER);
+            }
+
+            // Append current reading (0.1 cm units) to ring buffer
+            int16_t d_units = (int16_t)roundf(distance * 10.0f);
+            id(dist_buffer)[id(dist_buffer_head)] = d_units;
+            id(dist_buffer_head) = (id(dist_buffer_head) + 1) % MAX_BUFFER;
+            if (id(dist_buffer_count) < MAX_BUFFER) {
+              id(dist_buffer_count) = id(dist_buffer_count) + 1;
+            }
+
+            // Cooldown after a confirmed regen prevents the same step from
+            // re-triggering as the old window shifts past it.
+            if (id(cooldown_samples) > 0) {
+              id(cooldown_samples) = id(cooldown_samples) - 1;
+              return;
+            }
+
+            // Compute lookback offset in samples
+            int update_sec = (int)id(update_interval_seconds).state;
+            if (update_sec < 1) update_sec = 60;
+            int lookback_hours = (int)id(regen_confirmation_hours).state;
+            int lookback_offset = (lookback_hours * 3600) / update_sec;
+
+            // Cap lookback_offset so we never index past the buffer (defense in
+            // depth — UI min interval is 30s which keeps offset within bounds).
+            int max_offset = MAX_BUFFER - RECENT_WINDOW - OLD_WINDOW;
+            if (lookback_offset > max_offset) lookback_offset = max_offset;
+            if (lookback_offset < 1) lookback_offset = 1;
+
+            int needed = RECENT_WINDOW + lookback_offset + OLD_WINDOW;
+            if (id(dist_buffer_count) < needed) return;
+
+            int head = id(dist_buffer_head);
+
+            // Recent window: most recent RECENT_WINDOW samples
+            std::vector<int16_t> recent;
+            recent.reserve(RECENT_WINDOW);
+            for (int i = 0; i < RECENT_WINDOW; i++) {
+              int idx = (head - 1 - i + MAX_BUFFER) % MAX_BUFFER;
+              recent.push_back(id(dist_buffer)[idx]);
+            }
+
+            // Old window: OLD_WINDOW samples ending lookback_offset positions ago
+            std::vector<int16_t> old_window;
+            old_window.reserve(OLD_WINDOW);
+            for (int i = 0; i < OLD_WINDOW; i++) {
+              int idx = (head - 1 - lookback_offset - i + MAX_BUFFER) % MAX_BUFFER;
+              old_window.push_back(id(dist_buffer)[idx]);
+            }
+
+            // Median of the old window (sort is destructive; recent stays unsorted
+            // for the above-count pass below)
+            // Lower median for even-N (canonical choice; reviewer flagged
+            // upper-median bias as off-by-one).
+            std::sort(old_window.begin(), old_window.end());
+            int16_t old_med = old_window[(OLD_WINDOW - 1) / 2];
+
             float step_thresh = id(regen_step_threshold).state;
+            int16_t step_thresh_units = (int16_t)roundf(step_thresh * 10.0f);
+            int16_t above_threshold_units = old_med + step_thresh_units;
 
-            const float REFILL_DROP_CM = 10.0;
-            const float EMA_ALPHA = 0.05;
-            const float NOISE_BAND_CM = 1.5;
-            const int   CREDIT_MIN_SAMPLES = 15;  // min evidence to credit regen on refill interrupt
-
-            // === INITIALIZE BASELINE ON FIRST VALID READING ===
-            if (baseline <= 0.0) {
-              id(step_baseline) = distance;
-              ESP_LOGI("step", "Baseline initialized to %.1f cm", distance);
-              return;
+            // Count of recent samples individually above (old_med + threshold)
+            // — guards against firing while the recent window is mid-transition.
+            int above_count = 0;
+            for (int16_t v : recent) {
+              if (v > above_threshold_units) above_count++;
             }
 
-            // === SALT REFILL DETECTION (large drop) ===
-            if (distance < baseline - REFILL_DROP_CM) {
-              // If refill interrupts a CONFIRMING window with enough *affirmative*
-              // evidence, credit the pending regen before resetting state.
-              // Requires both: minimum samples collected AND at least half of them
-              // actually above threshold (so noise-borderline windows don't credit).
-              if (id(step_state) == 1
-                  && id(confirm_sample_count) >= CREDIT_MIN_SAMPLES
-                  && id(confirm_above_count) >= CREDIT_MIN_SAMPLES / 2) {
-                id(hours_since_regen) = 0;
-                id(regen_overdue).publish_state(false);
-                id(last_regen_sensor).publish_state(0.0);
-                ESP_LOGI("step", "Refill during CONFIRMING — crediting pending regen (samples=%d, above=%d)",
-                         id(confirm_sample_count), id(confirm_above_count));
-              }
-              ESP_LOGI("step", "Salt refill detected: %.1f -> %.1f cm (drop %.1f)",
-                       baseline, distance, baseline - distance);
-              id(step_baseline) = distance;
-              id(step_state) = 0;
-              id(confirm_above_count) = 0;
-              id(confirm_sample_count) = 0;
-              return;
-            }
+            std::sort(recent.begin(), recent.end());
+            int16_t recent_med = recent[(RECENT_WINDOW - 1) / 2];
 
-            // === STATE MACHINE ===
-            if (id(step_state) == 0) {
-              // MONITORING state: update EMA baseline for readings within noise band
-              if (fabs(distance - baseline) < NOISE_BAND_CM) {
-                id(step_baseline) = EMA_ALPHA * distance + (1.0 - EMA_ALPHA) * baseline;
-              }
+            float recent_med_cm = recent_med / 10.0f;
+            float old_med_cm = old_med / 10.0f;
+            float delta_cm = recent_med_cm - old_med_cm;
 
-              // Check for step increase -> enter CONFIRMING
-              if (distance > baseline + step_thresh) {
-                id(step_state) = 1;
-                id(confirm_above_count) = 0;
-                id(confirm_sample_count) = 0;
-                ESP_LOGI("step", "Potential step: %.1f cm (baseline %.1f + thresh %.1f = %.1f)",
-                         distance, baseline, step_thresh, baseline + step_thresh);
-              }
+            int confirm_pct = (int)id(regen_confirm_percent).state;
+            int required_above = (RECENT_WINDOW * confirm_pct) / 100;
+            if (required_above < 1) required_above = 1;
 
-            } else if (id(step_state) == 1) {
-              // CONFIRMING state: accumulate sample counts; decide per-reading.
-              id(confirm_sample_count) = id(confirm_sample_count) + 1;
-              if (distance > baseline + step_thresh) {
-                id(confirm_above_count) = id(confirm_above_count) + 1;
-              }
+            ESP_LOGD("regen", "Compare recent_med=%.1f old_med=%.1f delta=%.1f thresh=%.1f above=%d/%d (need %d, %d%%)",
+                     recent_med_cm, old_med_cm, delta_cm, step_thresh,
+                     above_count, RECENT_WINDOW, required_above, confirm_pct);
 
-              int target_hours = (int)id(regen_confirmation_hours).state;
-              int update_sec = (int)id(update_interval_seconds).state;
-              if (update_sec < 1) update_sec = 60;  // guard against zero
-              int window_samples = (target_hours * 3600) / update_sec;
-              if (window_samples < 1) window_samples = 1;
-              int required = (window_samples * (int)id(regen_confirm_percent).state) / 100;
-              if (required < 1) required = 1;
-
-              // Early confirm: hit the required count before window expires.
-              if (id(confirm_above_count) >= required) {
-                ESP_LOGI("step", "Regen confirmed! %d/%d samples above threshold after %d samples (window=%d, %d%%). "
-                                  "Baseline %.1f -> %.1f cm",
-                         id(confirm_above_count), required, id(confirm_sample_count),
-                         window_samples, (int)id(regen_confirm_percent).state,
-                         baseline, distance);
-                id(step_baseline) = distance;
-                id(hours_since_regen) = 0;
-                id(step_state) = 0;
-                id(confirm_above_count) = 0;
-                id(confirm_sample_count) = 0;
-                id(regen_overdue).publish_state(false);
-                id(last_regen_sensor).publish_state(0.0);
-                return;
-              }
-
-              // Window expired without reaching required count -> discard
-              if (id(confirm_sample_count) >= window_samples) {
-                ESP_LOGI("step", "Regen NOT confirmed: %d/%d samples above threshold in full window (required %d). Discarding.",
-                         id(confirm_above_count), id(confirm_sample_count), required);
-                id(step_state) = 0;
-                id(confirm_above_count) = 0;
-                id(confirm_sample_count) = 0;
-              }
+            if (delta_cm >= step_thresh && above_count >= required_above) {
+              ESP_LOGI("regen", "Regen confirmed! recent_med=%.1f old_med=%.1f delta=%.1f cm "
+                                "(lookback %dh, threshold %.1f cm, above %d/%d)",
+                       recent_med_cm, old_med_cm, delta_cm, lookback_hours, step_thresh,
+                       above_count, RECENT_WINDOW);
+              id(hours_since_regen) = 0;
+              id(last_regen_sensor).publish_state(0.0);
+              id(regen_overdue).publish_state(false);
+              id(cooldown_samples) = lookback_offset + RECENT_WINDOW;
             }
 
   # WiFi signal strength
@@ -477,8 +492,7 @@ interval:
             - component.update: salt_distance_raw
 
   # Hourly tick: increments the days-since-regen counter and publishes
-  # overdue state. Confirmation progress is now per-reading (not hourly),
-  # so this interval no longer participates in the detection state machine.
+  # overdue state. Detection itself runs per-reading on the distance sensor.
   - interval: 3600s
     then:
       - lambda: |-
@@ -488,7 +502,7 @@ interval:
 
             if (id(hours_since_regen) >= overdue_hours) {
               id(regen_overdue).publish_state(true);
-              ESP_LOGW("step", "Regeneration overdue! %d hours since last detected step", id(hours_since_regen));
+              ESP_LOGW("regen", "Regeneration overdue! %d hours since last detected step", id(hours_since_regen));
             }
           }
 
@@ -515,6 +529,5 @@ esphome:
       - component.update: firmware_version
       - delay: 500ms
       - lambda: |-
-          ESP_LOGI("step", "Boot: baseline=%.1f cm, hours_since_regen=%d, state=%d, confirm_above=%d, confirm_samples=%d",
-                   id(step_baseline), id(hours_since_regen), id(step_state),
-                   id(confirm_above_count), id(confirm_sample_count));
+          ESP_LOGI("regen", "Boot: hours_since_regen=%d (buffer empty, will warm up over ~2.5h)",
+                   id(hours_since_regen));
