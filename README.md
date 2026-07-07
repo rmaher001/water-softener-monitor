@@ -1,6 +1,6 @@
 # Water Softener Salt Monitor
 
-Monitor your water softener salt level from Home Assistant. A distance sensor measures the salt level in your brine tank and reports the percentage full. Use Home Assistant automations to send notifications when salt is low, so you never run out.
+Monitor your water softener salt level from Home Assistant. A distance sensor on the tank lid measures the distance down to the salt surface — as salt is used up, the distance grows. It gives you two honest signals: **"add salt"** when the level gets low, and **"your softener may be broken"** when no salt has been consumed for too long (it caught a stuck brine float in the wild). No percentages, no predictions — just distance and status.
 
 **[Web Installer](https://rmaher001.github.io/water-softener-monitor/)** | Uses M5Stack ATOM Lite or S3 hardware with VL53L0X ToF sensor
 
@@ -86,11 +86,11 @@ For advanced management and customization:
 
 All parameters are adjustable in Home Assistant (no reflashing needed).
 
-**Required — set these for your tank:**
-- **Tank Height** — total internal tank height in cm (default 100)
-- **Refill Threshold Distance** — distance at which "Refill" status triggers (default 43 cm)
+**The one setting you need:**
+- **Refill Threshold Distance** — the distance (cm from the sensor) at which "Refill" status triggers. Pick it from a fresh fill: read **Distance to Salt** right after filling, then add the depletion you're comfortable with before an alert (e.g. fresh fill reads 30 cm → set threshold to 40–45 cm).
 
 **Optional — defaults work well, leave them alone unless you need to tune:**
+- **Tank Height** — total internal tank height in cm. Only used by the *Set Default Thresholds* button (which sets the refill threshold to 43% of tank height). Nothing else reads it, so you can ignore it and set the threshold directly.
 - **Update Interval** — sensor poll rate in seconds (30–300, default 60)
 - **Regen Step Threshold** — permanent distance jump that signals a regeneration cycle completed (default 2.0 cm)
 - **Regen Confirmation Hours** — how long the step must persist before being confirmed as a regen (default 6 h)
@@ -100,11 +100,27 @@ The regen-detection settings are optional — start with the defaults and only t
 
 **Note**: Both ATOM Lite and S3 include a web interface at http://water-softener-monitor.local (with MAC suffix) for standalone configuration.
 
-## Status
+## Salt & Refilling
 
-The salt status is reported via `text_sensor.water_softener_salt_status`:
-- **Good** — measured distance is below the refill threshold (tank has enough salt)
-- **Refill** — distance is at or above the refill threshold (time to add salt)
+- **What salt:** slow-dissolve pellets work best.
+- **How much:** about two-thirds full. Don't overfill — keep the salt **above the water line** (10–15 cm above is a good target).
+- **When status shows Refill:** just add salt. The sensor sees the new, closer salt surface and the status returns to **Good** on its own — **no recalibration needed.** Only revisit **Refill Threshold Distance** if you change how full you normally fill the tank.
+
+## What the entities mean
+
+| Entity | Meaning |
+|---|---|
+| **Distance to Salt** | Raw distance (cm) from sensor to salt surface. Bigger = less salt. |
+| **Salt Status** | `Good` (distance below the refill threshold) or `Refill` (at/above it — time to add salt) |
+| **Last Regeneration** | Days since the softener last consumed salt |
+| **Regeneration Overdue** | ON if no salt has been consumed in `Regen Overdue Days` (default 20) — your softener may not be working |
+| **Sensor Out of Range** | ON if the sensor reads <5 cm or >120 cm — check mounting/moisture |
+
+## How regeneration detection works
+
+When a softener regenerates, it consumes salt and the distance takes a small permanent step up (typically 2–5 cm). The firmware watches for these steps. If none happen for `Regen Overdue Days`, the **Regeneration Overdue** alert turns on.
+
+**Take that alert seriously.** A softener can appear to run normally — motor turning, water flowing — while consuming no salt at all (stuck brine float, clogged brine line, salt bridge). Overdue + salt level flat for weeks = call your water softener tech.
 
 ## Integration
 
@@ -112,6 +128,13 @@ The salt status is reported via `text_sensor.water_softener_salt_status`:
 - **Web Interface**: Available on both ATOM Lite and S3 (http://water-softener-monitor.local with MAC suffix)
 - **OTA Updates**: Supported through ESPHome Dashboard (no password required after adoption)
 - **Bluetooth**: Improv BLE for easy WiFi configuration
+
+## Troubleshooting
+
+- **Status stuck on Refill after adding salt** — the salt surface may be below the sensor's aim point, or your threshold is tighter than your fill level. Check Distance to Salt vs your threshold.
+- **Sensor Out of Range** — moisture or condensation on the sensor, or the lid was moved. Wipe the sensor and reseat the lid.
+- **Regeneration Overdue but softener sounds fine** — a running softener can still consume no salt. Poke the salt with a broom handle (salt bridge?), and check whether the brine tank is actually being refilled with water after a regeneration. If in doubt, call your tech.
+- **Reading jumped after opening the lid** — normal. Moving the lid shifts the sensor's reference point; it settles back once the lid is seated in its usual position.
 
 ## Project Structure
 
